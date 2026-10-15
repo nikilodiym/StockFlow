@@ -169,6 +169,7 @@ export default function App() {
     const [query, setQuery] = useState("");
     const [modal, setModal] = useState("");
     const [toast, setToast] = useState("");
+    const [loginError, setLoginError] = useState("");
     const [form, setForm] = useState({});
     const [loading, setLoading] = useState(false);
     const [side, setSide] = useState(false);
@@ -347,8 +348,11 @@ export default function App() {
     }, [token, offline, req, say]);
 
     const login = async (event) => {
-        console.log('LOGIN CLICKED');
         event.preventDefault();
+
+        if (loading) return;
+
+        setLoginError("");
         setLoading(true);
 
         try {
@@ -358,7 +362,7 @@ export default function App() {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    email: form.email,
+                    email: form.email?.trim().toLowerCase(),
                     password: form.password,
                 }),
             });
@@ -384,11 +388,12 @@ export default function App() {
             setForm({});
             say("Вітаємо у StockFlow");
         } catch (error) {
-            say(
+            const message =
                 error instanceof TypeError
-                    ? "Не вдалося підключитися до API. Перевірте сервер."
-                    : getErrorMessage(error),
-            );
+                    ? "Не вдалося підключитися до API. Запустіть сервер і спробуйте ще раз."
+                    : getErrorMessage(error);
+
+            setLoginError(message);
         } finally {
             setLoading(false);
         }
@@ -588,12 +593,19 @@ export default function App() {
                             </label>
 
 
+                            {loginError && (
+                                <p className="login-error" role="alert">
+                                    {loginError}
+                                </p>
+                            )}
+
                             <button
                                 type="submit"
                                 className="primary full"
-                                onClick={() => alert('КНОПКА ПРАЦЮЄ')}
+                                disabled={loading}
+                                aria-busy={loading}
                             >
-                                {loading ? 'Входимо…' : 'Увійти до системи'}
+                                {loading ? "Входимо…" : "Увійти до системи"}
                                 <ArrowUpRight size={17} />
                             </button>
 

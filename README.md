@@ -1,26 +1,35 @@
 # StockFlow
 Система складського обліку: Django REST API, React адмінпанель, React Native Android-клієнт.
 
-## API локально
+## Запуск демо на Windows
+
+Підготуйте API та демо-акаунт (виконується один раз):
+
 ```powershell
 cd server
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-python manage.py makemigrations inventory
 python manage.py migrate
 python manage.py seed_demo
-python manage.py runserver 0.0.0.0:8000
+pip install -e .
+cd ..
 ```
-Демо: admin@gmail.com / admin (тільки для локального запуску).
 
-## Вебпанель
+Запустіть API та вебпанель у двох окремих вікнах PowerShell з кореня проєкту:
+
 ```powershell
-cd web
+npm run api
+```
+
+```powershell
 npm install
 npm run dev
 ```
-Вебпанель спробує під'єднатись до API на http://localhost:8000/api і показує демо-дані, якщо API не запущено.
+
+Відкрийте адресу Vite, яку покаже термінал (зазвичай `http://localhost:5173`). Вебпанель підключається до API на `http://localhost:8000/api`.
+
+Демо для локального запуску: `admin@gmail.com` / `admin`.
 
 ## Мобільний клієнт
 ```powershell

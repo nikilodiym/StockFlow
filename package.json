@@ -1,4 +1,13 @@
 {
+  "name": "stockflow",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix web run dev",
+    "build": "npm --prefix web run build",
+    "api": "server\\.venv\\Scripts\\python.exe server/manage.py runserver 127.0.0.1:8000",
+    "seed": "python server/manage.py seed_demo"
+  },
   "devDependencies": {
     "prettier": "^3.9.10"
   }
