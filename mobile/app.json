@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "StockFlow",
+    "slug": "stockflow",
+    "scheme": "stockflow",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "ua.stockflow.app",
+      "permissions": [
+        "CAMERA"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "StockFlow використовує камеру для сканування штрих-кодів."
+        }
+      ],
+      "expo-sqlite",
+      "expo-asset",
+      "expo-status-bar"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}

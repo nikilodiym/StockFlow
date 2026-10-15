@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: stockflow
+      POSTGRES_USER: stockflow
+      POSTGRES_PASSWORD: stockflow
+    ports: ["5432:5432"]
+    volumes: ["stockflow_pg:/var/lib/postgresql/data"]
+  api:
+    build: ./server
+    environment:
+      DATABASE_URL: postgres://stockflow:stockflow@db:5432/stockflow
+      DJANGO_SECRET_KEY: change-me-before-deploy
+      DJANGO_DEBUG: "1"
+      CORS_ALLOWED_ORIGINS: http://localhost:5173
+    ports: ["8000:8000"]
+    depends_on: [db]
+volumes:
+  stockflow_pg:

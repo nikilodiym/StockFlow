@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.expo/
+.expo-export/
+.expo-home/
+.tmp-cache/
+.packages/
+.tmp/
+.venv/
+__pycache__/
+*.py[cod]
+.env
+server/db.sqlite3
