@@ -347,57 +347,47 @@ export default function App() {
         };
     }, [token, offline, req, say]);
 
-    const login = async (event) => {
-        event.preventDefault();
 
-        if (loading) return;
-
-        setLoginError("");
+    const login = async e => {
+        e.preventDefault();
         setLoading(true);
 
         try {
-            const response = await fetch(`${API}/auth/login/`, {
-                method: "POST",
+            say('Відправляємо запит на сервер...');
+
+            const r = await fetch(API + '/auth/login/', {
+                method: 'POST',
                 headers: {
-                    "Content-Type": "application/json",
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    email: form.email?.trim().toLowerCase(),
-                    password: form.password,
-                }),
+                    email: form.email,
+                    password: form.password
+                })
             });
 
-            const data = await response.json().catch(() => ({}));
+            const d = await r.json();
 
-            if (!response.ok) {
+            if (!r.ok) {
                 throw new Error(
-                    data.detail || "Перевірте email і пароль.",
+                    `HTTP ${r.status}: ${JSON.stringify(d)}`
                 );
             }
 
-            if (!data.access || !data.refresh || !data.user) {
-                throw new Error("Сервер повернув неповні дані авторизації.");
-            }
+            localStorage.setItem('sf_token', d.access);
+            localStorage.setItem('sf_refresh', d.refresh);
+            localStorage.setItem('sf_user', JSON.stringify(d.user));
 
-            localStorage.setItem(STORAGE.access, data.access);
-            localStorage.setItem(STORAGE.refresh, data.refresh);
-            localStorage.setItem(STORAGE.user, JSON.stringify(data.user));
-
-            setToken(data.access);
-            setUser(data.user);
-            setForm({});
-            say("Вітаємо у StockFlow");
+            setToken(d.access);
+            setUser(d.user);
+            say('Вітаємо у StockFlow');
         } catch (error) {
-            const message =
-                error instanceof TypeError
-                    ? "Не вдалося підключитися до API. Запустіть сервер і спробуйте ще раз."
-                    : getErrorMessage(error);
-
-            setLoginError(message);
+            say(`Помилка: ${error.message}`);
         } finally {
             setLoading(false);
         }
     };
+
 
     const low = useMemo(
         () =>

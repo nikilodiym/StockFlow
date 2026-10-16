@@ -9,6 +9,13 @@
     "seed": "python server/manage.py seed_demo"
   },
   "devDependencies": {
-    "prettier": "^3.9.10"
+    "@types/react": "~19.2.4",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.3"
+  },
+  "dependencies": {
+    "expo": "~57.0.23",
+    "react": "19.2.3",
+    "react-native": "0.86.3"
   }
 }
