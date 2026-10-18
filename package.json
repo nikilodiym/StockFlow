@@ -2,9 +2,12 @@
   "name": "stockflow",
   "version": "1.0.0",
   "private": true,
+  "main": "expo-router/entry",
   "scripts": {
     "dev": "npm --prefix web run dev",
     "build": "npm --prefix web run build",
+    "mobile": "npm --prefix mobile start -- --clear",
+    "mobile:android": "npm --prefix mobile run android -- --no-bundler",
     "api": "server\\.venv\\Scripts\\python.exe server/manage.py runserver 0.0.0.0:8000",
     "seed": "python server/manage.py seed_demo"
   },

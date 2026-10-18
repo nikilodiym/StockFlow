@@ -32,11 +32,16 @@ npm run dev
 Демо для локального запуску: `admin@gmail.com` / `admin`.
 
 ## Мобільний клієнт
+
+Запускайте Expo з папки `mobile`, щоб він використовував `expo-router/entry`:
+
 ```powershell
 cd mobile
 npm install
 npx expo start
 ```
+
+Або з кореня репозиторію запустіть `npm run mobile`.
 Передбачені Expo SQLite офлайн-черга та ручне введення; для камери використовується expo-camera. Для реального Android сканування потрібен Android-пристрій/емулятор та збірка Expo.
 
 Для PostgreSQL задайте DATABASE_URL і DJANGO_SECRET_KEY. У продакшені вимкнути DEBUG, обмежити ALLOWED_HOSTS, налаштувати HTTPS, секрети та резервне копіювання.

@@ -16,7 +16,11 @@ import { useSQLiteContext, SQLiteProvider } from 'expo-sqlite';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API = 'http://192.168.7.13:8000/api';
+// Android emulators reach the host computer through 10.0.2.2. Physical
+// devices can use their computer's LAN address from Settings.
+const API = Platform.OS === 'android'
+    ? 'http://10.0.2.2:8000/api'
+    : 'http://localhost:8000/api';
 
 type Screen = 'home' | 'scan' | 'search' | 'docs' | 'settings';
 type DocumentType = 'receipt' | 'writeoff' | 'inventory' | 'transfer';
@@ -227,9 +231,14 @@ function Worker() {
 
                 if (!active) return;
 
-                if (savedUrl) {
+                // Older builds persisted a machine-specific LAN IP. It goes
+                // stale when the server moves or the app runs in an emulator.
+                const isStaleDefault = savedUrl === 'http://192.168.7.13:8000/api';
+                if (savedUrl && !isStaleDefault) {
                     setServerUrl(savedUrl);
                     setServerDraft(savedUrl);
+                } else if (isStaleDefault) {
+                    await AsyncStorage.setItem('serverUrl', API);
                 }
 
                 if (savedToken) {
@@ -522,7 +531,7 @@ function Worker() {
         } catch (error) {
             Alert.alert(
                 'Не вдалося увійти',
-                getErrorMessage(error)
+                `${getErrorMessage(error)}\n\nПеревірте, що API запущений на комп’ютері (npm run api). Для фізичного телефона вкажіть IPv4 комп’ютера в Налаштуваннях; для Android-емулятора використовується 10.0.2.2.`
             );
         }
     };
