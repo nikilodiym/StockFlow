@@ -15,6 +15,15 @@ class IsManagerOrAdmin(BasePermission):
         )
 
 
+class IsAdminOnly(BasePermission):
+    """Only administrators may read or change user accounts."""
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and (
+            request.user.is_superuser
+            or Membership.objects.filter(user=request.user, role="admin").exists()
+        )
+
+
 class IsAdmin(BasePermission):
     """Only administrators may change warehouse and membership records."""
     def has_permission(self, request, view):

@@ -6,10 +6,11 @@ from rest_framework import viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
+from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Product,Document,Warehouse,Membership,SyncEvent
-from .serializers import ProductSerializer,DocumentSerializer,WarehouseSerializer,MembershipSerializer
-from .permissions import IsManagerOrAdmin, IsAdmin
+from .serializers import ProductSerializer,DocumentSerializer,WarehouseSerializer,MembershipSerializer,UserSerializer,User
+from .permissions import IsManagerOrAdmin, IsAdmin, IsAdminOnly
 from .services import apply_document_stock
 class HealthView(APIView):
  permission_classes=[AllowAny]
@@ -17,7 +18,7 @@ class HealthView(APIView):
 class LoginView(APIView):
  permission_classes=[AllowAny]
  def post(self,request):
-  user=authenticate(request,username=request.data.get('email',''),password=request.data.get('password',''))
+  user=authenticate(request,username=str(request.data.get('email','')).strip().lower(),password=request.data.get('password',''))
   if not user: return Response({'detail':'Невірний email або пароль'},status=401)
   refresh=RefreshToken.for_user(user); memberships=Membership.objects.filter(user=user).select_related('warehouse')
   return Response({'access':str(refresh.access_token),'refresh':str(refresh),'user':{'id':user.id,'email':user.email or user.username,'name':user.get_full_name() or user.username,'memberships':MembershipSerializer(memberships,many=True).data}})
@@ -25,6 +26,12 @@ class ProductViewSet(viewsets.ModelViewSet):
  queryset=Product.objects.filter(active=True); serializer_class=ProductSerializer; permission_classes=[IsManagerOrAdmin]; filterset_fields=['category','unit']; search_fields=['name','sku','barcode']; ordering_fields=['name','stock','updated_at']
 class WarehouseViewSet(viewsets.ModelViewSet): queryset=Warehouse.objects.filter(active=True); serializer_class=WarehouseSerializer; permission_classes=[IsAdmin]
 class MembershipViewSet(viewsets.ModelViewSet): queryset=Membership.objects.select_related('user','warehouse'); serializer_class=MembershipSerializer; permission_classes=[IsAdmin]
+class UserViewSet(viewsets.ModelViewSet):
+ """Staff accounts. DELETE blocks the account instead of removing it: documents keep their author."""
+ queryset=User.objects.prefetch_related('memberships__warehouse').order_by('-is_active','first_name','username'); serializer_class=UserSerializer; permission_classes=[IsAdminOnly]; search_fields=['username','email','first_name','last_name']; http_method_names=['get','post','patch','delete','head','options']
+ def perform_destroy(self,instance):
+  if instance.pk==self.request.user.pk: raise ValidationError({'detail':'Не можна заблокувати власний акаунт'})
+  instance.is_active=False; instance.save(update_fields=['is_active'])
 class DocumentViewSet(viewsets.ModelViewSet):
  queryset=Document.objects.select_related('warehouse','created_by').prefetch_related('lines__product'); serializer_class=DocumentSerializer; filterset_fields=['type','status','warehouse']; ordering_fields=['created_at','updated_at']
  @transaction.atomic
