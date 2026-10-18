@@ -143,6 +143,12 @@ const DOCUMENT_TYPES = {
     },
 };
 
+const ROLES = {
+    worker: "Комірник",
+    manager: "Менеджер складу",
+    admin: "Адміністратор",
+};
+
 function readUser() {
     try {
         return JSON.parse(localStorage.getItem(STORAGE.user) || "null");
@@ -155,6 +161,16 @@ function getErrorMessage(error) {
     return error instanceof Error
         ? error.message
         : "Сталася невідома помилка";
+}
+
+// DRF повертає помилки валідації як { поле: ["повідомлення"] }.
+function formatFieldErrors(data) {
+    if (!data || typeof data !== "object") return "";
+
+    return Object.values(data)
+        .flat()
+        .filter((value) => typeof value === "string")
+        .join(" ");
 }
 
 export default function App() {
@@ -174,6 +190,9 @@ export default function App() {
     const [loading, setLoading] = useState(false);
     const [side, setSide] = useState(false);
     const [syncing, setSyncing] = useState(false);
+    const [team, setTeam] = useState([]);
+    const [warehouses, setWarehouses] = useState([]);
+    const [teamLoading, setTeamLoading] = useState(false);
 
     const say = useCallback((message) => {
         setToast(message);
@@ -274,7 +293,11 @@ export default function App() {
 
                 try {
                     const data = await response.json();
-                    message = data.detail || data.message || message;
+                    message =
+                        data.detail ||
+                        data.message ||
+                        formatFieldErrors(data) ||
+                        message;
                 } catch {
                     // Відповідь сервера не містить JSON.
                 }
@@ -346,6 +369,28 @@ export default function App() {
             cancelled = true;
         };
     }, [token, offline, req, say]);
+
+    const loadTeam = useCallback(async () => {
+        setTeamLoading(true);
+
+        try {
+            const [userData, warehouseData] = await Promise.all([
+                req("/users/"),
+                req("/warehouses/"),
+            ]);
+
+            setTeam(userData.results ?? userData);
+            setWarehouses(warehouseData.results ?? warehouseData);
+        } catch (error) {
+            say(getErrorMessage(error));
+        } finally {
+            setTeamLoading(false);
+        }
+    }, [req, say]);
+
+    useEffect(() => {
+        if (token && !offline && page === "Команда") loadTeam();
+    }, [token, offline, page, loadTeam]);
 
 
     const login = async e => {
@@ -472,6 +517,56 @@ export default function App() {
         }
 
         setModal("");
+    };
+
+    const newUser = () => {
+        setForm({
+            name: "",
+            email: "",
+            password: "",
+            role: "worker",
+            warehouse: warehouses[0]?.id ?? "",
+        });
+
+        setModal("user");
+    };
+
+    const saveUser = async (event) => {
+        event.preventDefault();
+
+        try {
+            const saved = await req("/users/", {
+                method: "POST",
+                body: JSON.stringify({
+                    ...form,
+                    warehouse: Number(form.warehouse),
+                }),
+            });
+
+            setTeam((current) => [saved, ...current]);
+            say(`Акаунт ${saved.email} створено`);
+        } catch (error) {
+            say(`Не вдалося створити акаунт: ${getErrorMessage(error)}`);
+            return;
+        }
+
+        setModal("");
+    };
+
+    const updateMember = async (member, changes, message) => {
+        try {
+            const saved = await req(`/users/${member.id}/`, {
+                method: "PATCH",
+                body: JSON.stringify(changes),
+            });
+
+            setTeam((current) =>
+                current.map((item) => (item.id === saved.id ? saved : item)),
+            );
+            say(message);
+        } catch (error) {
+            say(`Не вдалося оновити користувача: ${getErrorMessage(error)}`);
+        }
     };
 
     const newDoc = async (type) => {
@@ -1267,28 +1362,87 @@ export default function App() {
 
                                 <button
                                     className="primary"
-                                    onClick={() => say("Керування через Django Admin")}
+                                    onClick={newUser}
+                                    disabled={offline}
                                 >
                                     <Plus size={16} />
-                                    Запросити користувача
+                                    Додати користувача
                                 </button>
                             </div>
 
-                            <div className="warehouse-card">
-                                <span className="avatar">
-                                    {(user?.name || user?.email || "К")
-                                        .slice(0, 1)
-                                        .toUpperCase()}
-                                </span>
+                            {teamLoading && team.length === 0 && (
+                                <p>Завантажуємо команду…</p>
+                            )}
 
-                                <div>
-                                    <b>{user?.name || "Користувач"}</b>
-                                    <small>{user?.email || "Email не вказано"}</small>
-                                </div>
+                            {team.map((member) => {
+                                const membership = member.memberships[0];
+                                const isSelf = member.id === user?.id;
 
-                                <span className="pill">Адміністратор</span>
-                                <Status>Активний</Status>
-                            </div>
+                                return (
+                                    <div className="warehouse-card" key={member.id}>
+                                        <span className="avatar">
+                                            {(member.name || member.email || "К")
+                                                .slice(0, 1)
+                                                .toUpperCase()}
+                                        </span>
+
+                                        <div>
+                                            <b>
+                                                {member.name}
+                                                {isSelf && " (ви)"}
+                                            </b>
+                                            <small>
+                                                {member.email}
+                                                {membership
+                                                    ? ` · ${membership.warehouse_name}`
+                                                    : " · без складу"}
+                                            </small>
+                                        </div>
+
+                                        <select
+                                            className="role-select"
+                                            value={membership?.role ?? ""}
+                                            disabled={isSelf || !membership}
+                                            onChange={(event) =>
+                                                updateMember(
+                                                    member,
+                                                    { role: event.target.value },
+                                                    "Роль оновлено",
+                                                )
+                                            }
+                                            aria-label={`Роль ${member.email}`}
+                                        >
+                                            {!membership && <option value="">—</option>}
+                                            {Object.entries(ROLES).map(([value, label]) => (
+                                                <option key={value} value={value}>
+                                                    {label}
+                                                </option>
+                                            ))}
+                                        </select>
+
+                                        <Status low={!member.is_active}>
+                                            {member.is_active ? "Активний" : "Заблокований"}
+                                        </Status>
+
+                                        {!isSelf && (
+                                            <button
+                                                className="secondary"
+                                                onClick={() =>
+                                                    updateMember(
+                                                        member,
+                                                        { is_active: !member.is_active },
+                                                        member.is_active
+                                                            ? "Акаунт заблоковано"
+                                                            : "Акаунт розблоковано",
+                                                    )
+                                                }
+                                            >
+                                                {member.is_active ? "Заблокувати" : "Розблокувати"}
+                                            </button>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     ) : (
                         <div className="panel full">
@@ -1332,7 +1486,9 @@ export default function App() {
                                 <h2 id="modal-title">
                                     {modal === "product"
                                         ? "Новий товар"
-                                        : "Створити документ"}
+                                        : modal === "user"
+                                          ? "Новий користувач"
+                                          : "Створити документ"}
                                 </h2>
                             </div>
 
@@ -1466,6 +1622,99 @@ export default function App() {
                                     <button className="primary">
                                         <Plus size={15} />
                                         Зберегти товар
+                                    </button>
+                                </div>
+                            </form>
+                        ) : modal === "user" ? (
+                            <form
+                                onSubmit={saveUser}
+                                className="modal-form"
+                            >
+                                <label>
+                                    Ім’я та прізвище
+                                    <input
+                                        required
+                                        value={form.name || ""}
+                                        onChange={(event) =>
+                                            updateForm("name", event.target.value)
+                                        }
+                                    />
+                                </label>
+
+                                <label>
+                                    Робочий email
+                                    <input
+                                        required
+                                        type="email"
+                                        placeholder="name@company.com"
+                                        value={form.email || ""}
+                                        onChange={(event) =>
+                                            updateForm("email", event.target.value)
+                                        }
+                                    />
+                                </label>
+
+                                <label>
+                                    Тимчасовий пароль
+                                    <input
+                                        required
+                                        type="password"
+                                        minLength={8}
+                                        autoComplete="new-password"
+                                        value={form.password || ""}
+                                        onChange={(event) =>
+                                            updateForm("password", event.target.value)
+                                        }
+                                    />
+                                </label>
+
+                                <div className="form-row">
+                                    <label>
+                                        Роль
+                                        <select
+                                            value={form.role || "worker"}
+                                            onChange={(event) =>
+                                                updateForm("role", event.target.value)
+                                            }
+                                        >
+                                            {Object.entries(ROLES).map(([value, label]) => (
+                                                <option key={value} value={value}>
+                                                    {label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+
+                                    <label>
+                                        Склад
+                                        <select
+                                            required
+                                            value={form.warehouse ?? ""}
+                                            onChange={(event) =>
+                                                updateForm("warehouse", event.target.value)
+                                            }
+                                        >
+                                            {warehouses.map((warehouse) => (
+                                                <option key={warehouse.id} value={warehouse.id}>
+                                                    {warehouse.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                </div>
+
+                                <div className="modal-actions">
+                                    <button
+                                        type="button"
+                                        className="secondary"
+                                        onClick={() => setModal("")}
+                                    >
+                                        Скасувати
+                                    </button>
+
+                                    <button className="primary">
+                                        <Plus size={15} />
+                                        Створити акаунт
                                     </button>
                                 </div>
                             </form>
