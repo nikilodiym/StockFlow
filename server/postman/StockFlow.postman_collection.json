@@ -1,0 +1,359 @@
+{
+  "info": {
+    "name": "StockFlow API",
+    "description": "Ручна перевірка бекенду без фронтенду. Спочатку виконайте 'Auth / Login' — токен збережеться в змінну {{access}} і підставиться в усі інші запити. Повну схему всіх ендпоінтів можна імпортувати з {{base_url}}/api/schema/.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "email",
+      "value": "admin@gmail.com"
+    },
+    {
+      "key": "password",
+      "value": "admin"
+    },
+    {
+      "key": "device_id",
+      "value": "6f1c2d1e-0000-4000-8000-000000000001"
+    },
+    {
+      "key": "access",
+      "value": ""
+    },
+    {
+      "key": "refresh",
+      "value": ""
+    },
+    {
+      "key": "document_id",
+      "value": ""
+    },
+    {
+      "key": "cursor",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "url": "{{base_url}}/api/health/"
+      }
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('access', body.access);",
+                  "pm.collectionVariables.set('refresh', body.refresh);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"device\": { \"id\": \"{{device_id}}\", \"model\": \"Postman\", \"platform\": \"web\" }\n}"
+            },
+            "url": "{{base_url}}/api/auth/login/"
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/auth/me/"
+          }
+        },
+        {
+          "name": "Refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('access', body.access);",
+                  "if (body.refresh) pm.collectionVariables.set('refresh', body.refresh);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"refresh\": \"{{refresh}}\" }"
+            },
+            "url": "{{base_url}}/api/auth/refresh/"
+          }
+        },
+        {
+          "name": "Set PIN",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"pin\": \"1234\" }"
+            },
+            "url": "{{base_url}}/api/auth/pin/set/"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"refresh\": \"{{refresh}}\" }"
+            },
+            "url": "{{base_url}}/api/auth/logout/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Catalog",
+      "item": [
+        {
+          "name": "Products",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/products/?search=кава"
+          }
+        },
+        {
+          "name": "Scan barcode (pack)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/products/by-barcode/?code=2820000000011"
+          }
+        },
+        {
+          "name": "Units",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/units/"
+          }
+        },
+        {
+          "name": "Categories",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/categories/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Inventory",
+      "item": [
+        {
+          "name": "Warehouses",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/warehouses/"
+          }
+        },
+        {
+          "name": "Stock (low only)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/stock/?low=1"
+          }
+        },
+        {
+          "name": "Create receipt draft",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('document_id', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"receipt\",\n  \"warehouse\": 1,\n  \"counterparty\": \"ТОВ Постачальник\",\n  \"external_ref\": \"НК-123\",\n  \"lines\": [\n    { \"product\": 1, \"quantity\": 2, \"unit\": \"упак\" }\n  ]\n}"
+            },
+            "url": "{{base_url}}/api/documents/"
+          }
+        },
+        {
+          "name": "Post document",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/documents/{{document_id}}/post/"
+          }
+        },
+        {
+          "name": "Cancel document",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/documents/{{document_id}}/cancel/"
+          }
+        },
+        {
+          "name": "Stock movements of document",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/stock-movements/?document={{document_id}}"
+          }
+        },
+        {
+          "name": "Dashboard",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/dashboard/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sync",
+      "item": [
+        {
+          "name": "Pull",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.collectionVariables.set('cursor', pm.response.json().cursor);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/sync/pull/?device_id={{device_id}}&cursor={{cursor}}"
+          }
+        },
+        {
+          "name": "Push (create + post)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.variables.set('new_doc', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"batch_id\": \"{{$guid}}\",\n  \"device_id\": \"{{device_id}}\",\n  \"device\": { \"battery_level\": 64, \"is_charging\": false, \"app_version\": \"1.0.0\" },\n  \"items\": [\n    {\n      \"entity\": \"document\", \"id\": \"{{new_doc}}\", \"op\": \"create\",\n      \"data\": { \"type\": \"writeoff\", \"warehouse\": 1, \"writeoff_reason\": \"damage\", \"status\": \"posted\",\n                \"lines\": [ { \"product\": 2, \"quantity\": 1 } ] }\n    }\n  ]\n}"
+            },
+            "url": "{{base_url}}/api/sync/push/"
+          }
+        },
+        {
+          "name": "Sync journal",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/sync/batches/"
+          }
+        },
+        {
+          "name": "Open conflicts",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/sync/conflicts/?status=open"
+          }
+        },
+        {
+          "name": "Notifications (unread)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/notifications/?unread=1"
+          }
+        },
+        {
+          "name": "Notifications read all",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/notifications/read-all/"
+          }
+        }
+      ]
+    }
+  ]
+}
