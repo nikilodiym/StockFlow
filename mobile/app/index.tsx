@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-export { default } from '../src/App';
-=======
 
 import React, { useEffect, useState } from 'react';
 import {
@@ -20,17 +17,12 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useSQLiteContext, SQLiteProvider } from 'expo-sqlite';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
 
-// IP комп'ютера береться з адреси Metro, з якої Expo Go завантажив bundle.
-// Фолбек: Android-емулятор бачить хост через 10.0.2.2, інші — localhost.
-// Фізичний пристрій також може вказати IP у Налаштуваннях.
-const devHost = Constants.expoConfig?.hostUri?.split(':')[0];
-const API = devHost
-    ? `http://${devHost}:8000/api`
-    : Platform.OS === 'android'
-        ? 'http://10.0.2.2:8000/api'
-        : 'http://localhost:8000/api';
+// Android emulators reach the host computer through 10.0.2.2. Physical
+// devices can use their computer's LAN address from Settings.
+const API = Platform.OS === 'android'
+    ? 'http://10.0.2.2:8000/api'
+    : 'http://localhost:8000/api';
 
 type Screen = 'home' | 'scan' | 'search' | 'docs' | 'settings' | 'profile' | 'files' | 'detail' | 'import' | 'notifications' | 'conflict';
 type DocumentType = 'receipt' | 'writeoff' | 'inventory' | 'transfer';
@@ -965,4 +957,3 @@ const s = StyleSheet.create({
 
 export default App;
 
->>>>>>> origin/main
