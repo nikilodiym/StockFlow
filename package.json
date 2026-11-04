@@ -8,8 +8,12 @@
     "build": "npm --prefix web run build",
     "mobile": "npm --prefix mobile start -- --clear",
     "mobile:android": "npm --prefix mobile run android -- --no-bundler",
+    "db": "docker compose up -d db",
+    "db:stop": "docker compose stop db",
+    "migrate": "server\\.venv\\Scripts\\python.exe server/manage.py migrate",
     "api": "server\\.venv\\Scripts\\python.exe server/manage.py runserver 0.0.0.0:8000",
-    "seed": "python server/manage.py seed_demo"
+    "seed": "server\\.venv\\Scripts\\python.exe server/manage.py seed_demo",
+    "test:api": "cd server && .venv\\Scripts\\python.exe -m pytest"
   },
   "devDependencies": {
     "@types/react": "~19.2.4",

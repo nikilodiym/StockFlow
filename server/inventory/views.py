@@ -1,73 +1,186 @@
-from django.contrib.auth import authenticate
-from django.db import transaction
-from django.db.models import Sum,F
-from django.utils import timezone
+from django.db.models import F, Q
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import viewsets
-from rest_framework.views import APIView
+from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
-from rest_framework.exceptions import ValidationError
-from rest_framework_simplejwt.tokens import RefreshToken
-from .models import Product,Document,Warehouse,Membership,SyncEvent
-from .serializers import ProductSerializer,DocumentSerializer,WarehouseSerializer,MembershipSerializer,UserSerializer,User
-from .permissions import IsManagerOrAdmin, IsAdmin, IsAdminOnly
-from .services import apply_document_stock
-class HealthView(APIView):
- permission_classes=[AllowAny]
- def get(self,request): return Response({'status':'ok','service':'StockFlow API','time':timezone.now()})
-class LoginView(APIView):
- permission_classes=[AllowAny]
- def post(self,request):
-  user=authenticate(request,username=str(request.data.get('email','')).strip().lower(),password=request.data.get('password',''))
-  if not user: return Response({'detail':'Невірний email або пароль'},status=401)
-  refresh=RefreshToken.for_user(user); memberships=Membership.objects.filter(user=user).select_related('warehouse')
-  return Response({'access':str(refresh.access_token),'refresh':str(refresh),'user':{'id':user.id,'email':user.email or user.username,'name':user.get_full_name() or user.username,'memberships':MembershipSerializer(memberships,many=True).data}})
-class ProductViewSet(viewsets.ModelViewSet):
- queryset=Product.objects.filter(active=True); serializer_class=ProductSerializer; permission_classes=[IsManagerOrAdmin]; filterset_fields=['category','unit']; search_fields=['name','sku','barcode']; ordering_fields=['name','stock','updated_at']
-class WarehouseViewSet(viewsets.ModelViewSet): queryset=Warehouse.objects.filter(active=True); serializer_class=WarehouseSerializer; permission_classes=[IsAdmin]
-class MembershipViewSet(viewsets.ModelViewSet): queryset=Membership.objects.select_related('user','warehouse'); serializer_class=MembershipSerializer; permission_classes=[IsAdmin]
-class UserViewSet(viewsets.ModelViewSet):
- """Staff accounts. DELETE blocks the account instead of removing it: documents keep their author."""
- queryset=User.objects.prefetch_related('memberships__warehouse').order_by('-is_active','first_name','username'); serializer_class=UserSerializer; permission_classes=[IsAdminOnly]; search_fields=['username','email','first_name','last_name']; http_method_names=['get','post','patch','delete','head','options']
- def perform_destroy(self,instance):
-  if instance.pk==self.request.user.pk: raise ValidationError({'detail':'Не можна заблокувати власний акаунт'})
-  instance.is_active=False; instance.save(update_fields=['is_active'])
+from rest_framework.views import APIView
+
+from core.permissions import IsStaffOrReadOnly, is_member, warehouse_ids
+
+from . import reports
+from .models import Document, Stock, StockMovement, Warehouse
+from .serializers import DocumentSerializer, StockMovementSerializer, StockSerializer, WarehouseSerializer
+from .services import DocumentError, can_edit, can_post, cancel_document, post_document
+
+
+class WarehouseScopedMixin:
+    """Non-staff users see only the warehouses they have a membership on."""
+
+    warehouse_field = "warehouse_id"
+
+    def scope(self, queryset):
+        ids = warehouse_ids(self.request.user)
+        return queryset if ids is None else queryset.filter(**{f"{self.warehouse_field}__in": ids})
+
+
+class WarehouseViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
+    serializer_class = WarehouseSerializer
+    permission_classes = [IsStaffOrReadOnly]
+    warehouse_field = "id"
+    search_fields = ["name", "code"]
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Warehouse.objects.none()
+        queryset = Warehouse.objects.all()
+        if self.request.query_params.get("include_inactive") != "1":
+            queryset = queryset.filter(is_active=True)
+        return self.scope(queryset)
+
+    def perform_destroy(self, instance):
+        instance.is_active = False
+        instance.save(update_fields=["is_active", "updated_at"])
+
+
+class StockViewSet(WarehouseScopedMixin, viewsets.ReadOnlyModelViewSet):
+    """Current balances per warehouse. Read-only: balances change only by posting documents."""
+
+    serializer_class = StockSerializer
+    filterset_fields = ["warehouse", "product"]
+    search_fields = ["product__name", "product__sku"]
+    ordering_fields = ["quantity", "updated_at"]
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Stock.objects.none()
+        queryset = self.scope(Stock.objects.select_related("product", "warehouse"))
+        if self.request.query_params.get("low") == "1":
+            queryset = queryset.filter(quantity__lte=F("product__min_stock"))
+        return queryset
+
+    @extend_schema(parameters=[
+        OpenApiParameter("product", int, required=True), OpenApiParameter("warehouse", int), OpenApiParameter("days", int),
+    ])
+    @action(detail=False, methods=["get"])
+    def history(self, request):
+        """Daily balance changes of a product — data for the stock chart."""
+        product = request.query_params.get("product")
+        if not product:
+            raise ValidationError({"product": "Обов’язковий параметр"})
+        warehouse = request.query_params.get("warehouse")
+        if warehouse and not is_member(request.user, int(warehouse)):
+            raise PermissionDenied("Немає доступу до складу")
+        days = int(request.query_params.get("days", 30))
+        return Response(reports.stock_history(int(product), int(warehouse) if warehouse else None, days))
+
+
+class StockMovementViewSet(WarehouseScopedMixin, viewsets.ReadOnlyModelViewSet):
+    serializer_class = StockMovementSerializer
+    filterset_fields = ["warehouse", "product", "document", "movement_type"]
+    ordering_fields = ["created_at"]
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return StockMovement.objects.none()
+        return self.scope(StockMovement.objects.select_related("product", "document"))
+
+
 class DocumentViewSet(viewsets.ModelViewSet):
- queryset=Document.objects.select_related('warehouse','created_by').prefetch_related('lines__product'); serializer_class=DocumentSerializer; filterset_fields=['type','status','warehouse']; ordering_fields=['created_at','updated_at']
- @transaction.atomic
- def perform_create(self,serializer):
-  obj=serializer.save()
-  if obj.status=='posted': apply_document_stock(obj)
- @transaction.atomic
- def perform_update(self,serializer):
-  was_posted=serializer.instance.status=='posted'
-  obj=serializer.save()
-  if obj.status=='posted' and not was_posted: apply_document_stock(obj)
-class SyncView(APIView):
- @transaction.atomic
- def post(self,request):
-  device_id=request.data.get('device_id','unknown'); results=[]
-  for item in request.data.get('changes',[]):
-   client_id=item.get('client_id')
-   if not client_id: results.append({'client_id':None,'status':'rejected','reason':'client_id required'}); continue
-   old=SyncEvent.objects.filter(client_id=client_id).first()
-   if old: results.append({'client_id':str(client_id),'status':'accepted','entity_id':old.entity_id,'duplicate':True}); continue
-   try:
-    with transaction.atomic():
-     data=item['document']; local_version=data.get('version',1); existing=Document.objects.filter(pk=data.get('id')).first()
-     if existing and existing.version!=local_version:
-      results.append({'client_id':str(client_id),'status':'conflict','server_version':existing.version,'server':DocumentSerializer(existing).data,'local':data}); continue
-     data['client_id']=client_id; data['status']='synced'
-     data['lines']=[{k:v for k,v in line.items() if k in ('product','quantity','expected_quantity','unit')} for line in data.get('lines',[])]
-     serializer=DocumentSerializer(existing,data=data,partial=bool(existing),context={'request':request})
-     serializer.is_valid(raise_exception=True); obj=serializer.save(device_id=device_id)
-     apply_document_stock(obj)
-     SyncEvent.objects.create(user=request.user,device_id=device_id,client_id=client_id,entity_type='document',entity_id=str(obj.pk),result='accepted')
-     results.append({'client_id':str(client_id),'status':'accepted','entity_id':str(obj.pk),'version':obj.version})
-   except Exception as exc: results.append({'client_id':str(client_id),'status':'rejected','reason':str(exc)[:240]})
-  return Response({'results':results,'server_time':timezone.now()})
+    """
+    Warehouse documents.
+    - workers: create and edit their own drafts on their warehouses;
+    - managers: also edit any draft of their warehouse, post and cancel;
+    - DELETE marks a draft as deleted (soft delete, so phones learn about it).
+    Compatibility: creating/updating with "status": "posted" posts right away if allowed.
+    """
+
+    serializer_class = DocumentSerializer
+    filterset_fields = ["type", "status", "warehouse", "destination_warehouse", "created_by"]
+    search_fields = ["number", "note", "counterparty", "external_ref"]
+    ordering_fields = ["created_at", "updated_at", "posted_at"]
+    http_method_names = ["get", "post", "put", "patch", "delete", "head", "options"]
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Document.objects.none()
+        queryset = Document.objects.select_related(
+            "warehouse", "destination_warehouse", "created_by"
+        ).prefetch_related("lines__product__barcodes", "lines__product__base_unit", "lines__entered_unit")
+        if self.request.query_params.get("include_deleted") != "1":
+            queryset = queryset.filter(is_deleted=False)
+        ids = warehouse_ids(self.request.user)
+        if ids is not None:
+            queryset = queryset.filter(Q(warehouse_id__in=ids) | Q(destination_warehouse_id__in=ids))
+        return queryset
+
+    # --- permissions -------------------------------------------------------
+    def _check_can_edit(self, doc):
+        if not doc.is_draft:
+            raise ValidationError({"detail": "Змінювати можна лише чернетку. Проведений документ можна тільки скасувати."})
+        if not can_edit(self.request.user, doc):
+            raise PermissionDenied("Редагувати можна лише власні чернетки")
+
+    def _post_if_requested(self, doc):
+        if self.request.data.get("status") == Document.POSTED and can_post(self.request.user, doc):
+            try:
+                return post_document(doc, self.request.user)
+            except DocumentError as exc:
+                raise ValidationError({"detail": str(exc)})
+        return doc
+
+    # --- CRUD --------------------------------------------------------------
+    def perform_create(self, serializer):
+        warehouse = serializer.validated_data["warehouse"]
+        if not is_member(self.request.user, warehouse.pk):
+            raise PermissionDenied("Немає доступу до цього складу")
+        doc = serializer.save(created_by=self.request.user)
+        serializer.instance = self._post_if_requested(doc)
+
+    def perform_update(self, serializer):
+        self._check_can_edit(serializer.instance)
+        warehouse = serializer.validated_data.get("warehouse")
+        if warehouse and not is_member(self.request.user, warehouse.pk):
+            raise PermissionDenied("Немає доступу до цього складу")
+        doc = serializer.save()
+        serializer.instance = self._post_if_requested(doc)
+
+    def perform_destroy(self, doc):
+        self._check_can_edit(doc)
+        doc.is_deleted = True
+        doc.bump_version()
+        doc.save(update_fields=["is_deleted", "version", "updated_at"])
+
+    # --- actions -----------------------------------------------------------
+    def _run(self, func, doc):
+        if not can_post(self.request.user, doc):
+            raise PermissionDenied("Проводити та скасовувати документи може лише менеджер складу")
+        try:
+            doc = func(doc, self.request.user)
+        except DocumentError as exc:
+            raise ValidationError({"detail": str(exc)})
+        return Response(self.get_serializer(self.get_queryset().get(pk=doc.pk)).data)
+
+    @extend_schema(request=None)
+    @action(detail=True, methods=["post"])
+    def post(self, request, pk=None):
+        """Post the draft: balances change, movements are written."""
+        return self._run(post_document, self.get_object())
+
+    @extend_schema(request=None)
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        """Cancel a posted document: reverse movements with the opposite delta."""
+        return self._run(cancel_document, self.get_object())
+
+    @action(detail=True, methods=["get"])
+    def discrepancies(self, request, pk=None):
+        """Inventory: counted vs expected, with the money amount."""
+        return Response(reports.inventory_discrepancies(self.get_object()))
+
+
 class DashboardView(APIView):
- def get(self,request):
-  products=Product.objects.filter(active=True); docs=Document.objects.all(); low=products.filter(stock__lte=F('min_stock'))
-  return Response({'products_count':products.count(),'stock_units':products.aggregate(total=Sum('stock'))['total'] or 0,'low_stock_count':low.count(),'documents_today':docs.filter(created_at__date=timezone.localdate()).count(),'active_workers':Membership.objects.filter(user__is_active=True).values('user').distinct().count(),'recent_documents':DocumentSerializer(docs[:6],many=True).data,'low_stock':ProductSerializer(low[:8],many=True).data})
+    @extend_schema(responses={200: dict})
+    def get(self, request):
+        return Response(reports.dashboard(request.user, warehouse_ids(request.user)))
 

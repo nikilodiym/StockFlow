@@ -1,0 +1,191 @@
+[1mdiff --cc mobile/app/index.tsx[m
+[1mindex 89e817b,5868c88..0000000[m
+[1m--- a/mobile/app/index.tsx[m
+[1m+++ b/mobile/app/index.tsx[m
+[36m@@@ -1,1 -1,964 +1,968 @@@[m
+[32m++<<<<<<< HEAD[m
+[32m +export { default } from '../src/App';[m
+[32m++=======[m
+[32m+ [m
+[32m+ import React, { useEffect, useState } from 'react';[m
+[32m+ import {[m
+[32m+     View,[m
+[32m+     Text,[m
+[32m+     TextInput,[m
+[32m+     Pressable,[m
+[32m+     ScrollView,[m
+[32m+     StyleSheet,[m
+[32m+     Alert,[m
+[32m+     Platform,[m
+[32m+     Share,[m
+[32m+ } from 'react-native';[m
+[32m+ import { StatusBar } from 'expo-status-bar';[m
+[32m+ import { SafeAreaView } from 'react-native-safe-area-context';[m
+[32m+ import { CameraView, useCameraPermissions } from 'expo-camera';[m
+[32m+ import { useSQLiteContext, SQLiteProvider } from 'expo-sqlite';[m
+[32m+ import * as Haptics from 'expo-haptics';[m
+[32m+ import AsyncStorage from '@react-native-async-storage/async-storage';[m
+[32m+ import Constants from 'expo-constants';[m
+[32m+ [m
+[32m+ // IP комп'ютера береться з адреси Metro, з якої Expo Go завантажив bundle.[m
+[32m+ // Фолбек: Android-емулятор бачить хост через 10.0.2.2, інші — localhost.[m
+[32m+ // Фізичний пристрій також може вказати IP у Налаштуваннях.[m
+[32m+ const devHost = Constants.expoConfig?.hostUri?.split(':')[0];[m
+[32m+ const API = devHost[m
+[32m+     ? `http://${devHost}:8000/api`[m
+[32m+     : Platform.OS === 'android'[m
+[32m+         ? 'http://10.0.2.2:8000/api'[m
+[32m+         : 'http://localhost:8000/api';[m
+[32m+ [m
+[32m+ type Screen = 'home' | 'scan' | 'search' | 'docs' | 'settings' | 'profile' | 'files' | 'detail' | 'import' | 'notifications' | 'conflict';[m
+[32m+ type DocumentType = 'receipt' | 'writeoff' | 'inventory' | 'transfer';[m
+[32m+ [m
+[32m+ type Product = {[m
+[32m+     id: number;[m
+[32m+     sku: string;[m
+[32m+     barcode: string;[m
+[32m+     name: string;[m
+[32m+     unit: string;[m
+[32m+     stock: number;[m
+[32m+ };[m
+[32m+ [m
+[32m+ type DocumentItem = Product & {[m
+[32m+     quantity: number;[m
+[32m+     line_id?: number;[m
+[32m+ };[m
+[32m+ [m
+[32m+ type OutboxRow = {[m
+[32m+     id: string;[m
+[32m+     payload: string;[m
+[32m+     created_at: string;[m
+[32m+ };[m
+[32m+ [m
+[32m+ type UserData = {[m
+[32m+     name?: string;[m
+[32m+     username?: string;[m
+[32m+     email?: string;[m
+[32m+ };[m
+[32m+ [m
+[32m+ type LoginResponse = {[m
+[32m+     access?: string;[m
+[32m+     refresh?: string;[m
+[32m+     tokens?: {[m
+[32m+         access?: string;[m
+[32m+         refresh?: string;[m
+[32m+     };[m
+[32m+     user?: UserData;[m
+[32m+     profile?: UserData;[m
+[32m+     detail?: string;[m
+[32m+     message?: string;[m
+[32m+     error?: string;[m
+[32m+ };[m
+[32m+ [m
+[32m+ const localSeed: [string, string, string, string, number][] = [[m
+[32m+     ['DRK-001', '4820000000011', 'Вода мінеральна 1.5 л', 'шт', 128],[m
+[32m+     ['DRK-002', '4820000000012', 'Сік апельсиновий 1 л', 'шт', 42],[m
+[32m+     ['FOO-001', '4820000000013', 'Кава зернова 1 кг', 'упак', 18],[m
+[32m+     ['FOO-002', '4820000000014', 'Рис довгозернистий 1 кг', 'упак', 7],[m
+[32m+     ['HOM-001', '4820000000015', 'Рушники паперові 2 шт', 'упак', 34],[m
+[32m+ ];[m
+[32m+ [m
+[32m+ const documentTabs: [DocumentType, string][] = [[m
+[32m+     ['receipt', 'Прихід'],[m
+[32m+     ['writeoff', 'Списання'],[m
+[32m+     ['inventory', 'Інвентаризація'],[m
+[32m+     ['transfer', 'Переміщення'],[m
+[32m+ ];[m
+[32m+ [m
+[32m+ const uuid = (): string =>[m
+[32m+     'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {[m
+[32m+         const r = (Math.random() * 16) | 0;[m
+[32m+         return (c === 'x' ? r : (r & 3) | 8).toString(16);[m
+[32m+     });[m
+[32m+ [m
+[32m+ function getErrorMessage(error: unknown): string {[m
+[32m+     return error instanceof Error[m
+[32m+         ? error.message[m
+[32m+         : 'Сталася невідома помилка.';[m
+[32m+ }[m
+[32m+ [m
+[32m+ function App() {[m
+[32m+     return ([m
+[32m+         <SQLiteProvider[m
+[32m+             databaseName="stockflow.db"[m
+[32m+             onInit={async db => {[m
+[32m+                 await db.execAsync(`[m
+[32m+                     CREATE TABLE IF NOT EXISTS products ([m
+[32m+                         id INTEGER PRIMARY KEY,[m
+[32m+                         sku TEXT,[m
+[32m+                         barcode TEXT,[m
+[32m+                         name TEXT,[m
+[32m+                         unit TEXT,[m
+[32m+                         stock REAL DEFAULT 0[m
+[32m+                     );[m
+[32m+ [m
+[32m+                     CREATE TABLE IF NOT EXISTS documents ([m
+[32m+                         id TEXT PRIMARY KEY,[m
+[32m+                         type TEXT,[m
+[32m+                         status TEXT,[m
+[32m+                         warehouse INTEGER,[m
+[32m+                         note TEXT,[m
+[32m+                         created_at TEXT[m
+[32m+                     );[m
+[32m+ [m
+[32m+                     CREATE TABLE IF NOT EXISTS lines ([m
+[32m+                         id INTEGER PRIMARY KEY AUTOINCREMENT,[m
+[32m+                         document_id TEXT,[m
+[32m+                         product_id INTEGER,[m
+[32m+                         quantity REAL,[m
+[32m+                         unit TEXT[m
+[32m+                     );[m
+[32m+ [m
+[32m+                     CREATE TABLE IF NOT EXISTS outbox ([m
+[32m+                         id TEXT PRIMARY KEY,[m
+[32m+                         payload TEXT,[m
+[32m+                         created_at TEXT[m
+[32m+                     );[m
+[32m+                 `);[m
+[32m+ [m
+[32m+                 const row = await db.getFirstAsync<{ n: number }>([m
+[32m+                     'SELECT COUNT(*) AS n FROM products'[m
+[32m+                 );[m
+[32m+ [m
+[32m+                 if (!row || row.n === 0) {[m
+[32m+                     for (const p of localSeed) {[m
+[32m+                         await db.runAsync([m
+[32m+                             `INSERT INTO products[m
+[32m+                                 (sku, barcode, name, unit, stock)[m
+[32m+                              VALUES (?, ?, ?, ?, ?)`,[m
+[32m+                             p[m
+[32m+                         );[m
+[32m+                     }[m
+[32m+                 }[m
+[32m+             }}[m
+[32m+         >[m
+[32m+             <Worker />[m
+[32m+         </SQLiteProvider>[m
+[32m+     );[m
+[32m+ }[m
+[32m+ [m
+[32m+ function Worker() {[m
+[32m+     const db = useSQLiteContext();[m
+[32m+     const [permission, requestPermission] = useCameraPermissions();[m
+[32m+ [m
+[32m+     const [screen, setScreen] = useState<Screen>('home');[m
+[32m+     const [tab, setTab] = useState<DocumentType>('receipt');[m
+[32m+     const [items, setItems] = useState<DocumentItem[]>([]);[m
+[32m+     const [products, setProducts] = useState<Product[]>([]);[m
+[32m+     const [query, setQuery] = useState('');[m
+[32m+     const [manual, setManual] = useState('');[m
+[32m+     const [qty, setQty] = useState('1');[m
+[32m+     const [online, setOnline] = useState(false);[m
+[32m+     const [scanned, setScanned] = useState(false);[m
+[32m+     const [syncing, setSyncing] = useState(false);[m
+[32m+ [m
+[32m+     const [serverUrl, setServerUrl] = useState(API);[m
+[32m+     const [serverDraft, setServerDraft] = useState(API);[m
+[32m+     const [serverHost, setServerHost] = useState(Platform.OS === 'android' ? '10.0.2.2' : 'localhost');[m
+[32m+     const [serverPort, setServerPort] = useState('8000');[m
+[32m+     const [token, setToken] = useState('');[m
+[32m+     const [authEmail, setAuthEmail] = useState('');[m
+[32m+     const [authPassword, setAuth
