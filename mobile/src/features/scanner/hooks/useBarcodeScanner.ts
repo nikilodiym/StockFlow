@@ -7,6 +7,7 @@ export function useBarcodeScanner() {
     const [permission, requestPermission] = useCameraPermissions();
     const [scanned, setScanned] = useState(false),
         [found, setFound] = useState(false);
+    const [lastCode, setLastCode] = useState('');
     const busy = useRef(false);
     const locked = useRef(false);
     const { find } = useAddProduct();
@@ -17,7 +18,9 @@ export function useBarcodeScanner() {
         setScanned(true);
         setFound(false);
         try {
-            const added = await find(normalizeBarcode(code), 'scan');
+            const normalized = normalizeBarcode(code);
+            setLastCode(normalized);
+            const added = await find(normalized, 'scan');
             setFound(added);
             return added;
         } finally {
@@ -29,6 +32,7 @@ export function useBarcodeScanner() {
         requestPermission,
         scanned,
         found,
+        lastCode,
         resetScan: () => {
             if (!busy.current) {
                 locked.current = false;

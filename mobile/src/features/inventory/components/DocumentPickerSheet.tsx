@@ -1,5 +1,6 @@
+import { useResponsiveStyles } from '../../../hooks/useResponsiveStyles';
 import React from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '../../../components/ui/Icon';
 import { documentIcon, documentLabel, TYPE_LABEL } from '../services/DocumentService';
@@ -26,17 +27,25 @@ export default function DocumentPickerSheet({
     onSelect,
     onNew,
 }: Props) {
+    const s = useResponsiveStyles(baseStyles);
+
     const insets = useSafeAreaInsets();
+    const { height } = useWindowDimensions();
     return (
-        <Modal visible={visible} transparent statusBarTranslucent animationType="slide" onRequestClose={onClose}>
+        <Modal visible={visible} transparent statusBarTranslucent animationType="fade" onRequestClose={onClose}>
             <View style={s.root}>
                 <Pressable accessibilityLabel="Закрити вибір документа" style={s.scrim} onPress={onClose} />
-                <View style={[s.sheet, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+                <View
+                    style={[
+                        s.sheet,
+                        { paddingBottom: Math.max(insets.bottom, 20), maxHeight: height - insets.top - 12 },
+                    ]}
+                >
                     <View style={s.handle} />
                     <Text style={s.title}>{title}</Text>
                     <Text style={s.subtitle}>{subtitle}</Text>
                     <ScrollView
-                        style={{ maxHeight: 360 }}
+                        style={{ maxHeight: height * 0.55, flexShrink: 1, flexGrow: 0 }}
                         contentContainerStyle={{ gap: 8 }}
                         keyboardShouldPersistTaps="handled"
                     >
@@ -77,7 +86,7 @@ export default function DocumentPickerSheet({
         </Modal>
     );
 }
-const s = StyleSheet.create({
+const baseStyles = StyleSheet.create({
     root: { flex: 1, justifyContent: 'flex-end' },
     scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(18,26,23,.5)' },
     sheet: {
@@ -96,11 +105,11 @@ const s = StyleSheet.create({
         marginBottom: 18,
     },
     title: { fontSize: 20, fontWeight: '500', color: '#182021' },
-    subtitle: { fontSize: 14, color: '#667085', marginTop: 12, marginBottom: 12 },
+    subtitle: { fontSize: 14, color: '#606876', marginTop: 12, marginBottom: 12 },
     row: {
         minHeight: 68,
         borderWidth: 1,
-        borderColor: '#E7E9E8',
+        borderColor: '#DEE4E1',
         borderRadius: 14,
         padding: 12,
         flexDirection: 'row',
@@ -111,17 +120,17 @@ const s = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: 12,
-        backgroundColor: '#D8F2E4',
+        backgroundColor: '#D7F2E1',
         alignItems: 'center',
         justifyContent: 'center',
     },
-    rowTitle: { fontSize: 17, color: '#0E1112', fontWeight: '500' },
-    meta: { fontSize: 12, color: '#667085', marginTop: 5 },
-    empty: { fontSize: 14, color: '#667085', paddingVertical: 20, textAlign: 'center' },
+    rowTitle: { fontSize: 17, color: '#0E0F10', fontWeight: '500' },
+    meta: { fontSize: 12, color: '#606876', marginTop: 5 },
+    empty: { fontSize: 14, color: '#606876', paddingVertical: 20, textAlign: 'center' },
     newButton: {
         height: 44,
         borderRadius: 12,
-        backgroundColor: '#F7C914',
+        backgroundColor: '#F5C518',
         marginTop: 12,
         flexDirection: 'row',
         gap: 10,

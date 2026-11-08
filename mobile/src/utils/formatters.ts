@@ -17,15 +17,17 @@ export const longDateLabel = (date: Date = new Date()): string =>
     date.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' });
 
 /** 1 запис / 2 записи / 0 записів (as used on the sync card). */
-export const recordsLabel = (count: number): string =>
-    count === 1 ? 'запис' : count === 0 ? 'записів' : 'записи';
+export const recordsLabel = (count: number): string => {
+    const n = Math.abs(count) % 100;
+    return n >= 11 && n <= 14 ? 'записів' : n % 10 === 1 ? 'запис' : n % 10 >= 2 && n % 10 <= 4 ? 'записи' : 'записів';
+};
 
 /** Quoted CSV cell: "Кава ""Арабіка""". */
 export const csvCell = (value: string): string => `"${value.replace(/"/g, '""')}"`;
 
 /** RFC 4122 v4 id generated on the device (documents are created offline). */
 export const uuid = (): string =>
-    'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
         const r = (Math.random() * 16) | 0;
         return (c === 'x' ? r : (r & 3) | 8).toString(16);
     });

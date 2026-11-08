@@ -1,25 +1,32 @@
 import React from 'react';
 import { Text, View } from 'react-native';
-import s from '../../../constants/styles';
+import { useAppStyles } from '../../../constants/styles';
 import Button from '../../../components/ui/Button';
-import { recordsLabel, timeLabel } from '../../../utils/formatters';
-
-/** Outbox counter and the manual sync button. */
+import { recordsLabel } from '../../../utils/formatters';
 export default function SyncCard({ count, syncing, onSync }: { count: number; syncing: boolean; onSync: () => void }) {
+    const s = useAppStyles();
     return (
         <View style={s.syncCard}>
-            <View style={s.rowBetween}>
-                <View style={s.rowInline}>
-                    <Text style={s.syncCount}>{count}</Text>
-                    <View>
-                        <Text style={s.cardTitle}>{recordsLabel(count)}</Text>
-                        <Text style={s.mutedSmall}>{count ? 'Не синхронізовано' : 'Усе синхронізовано'}</Text>
-                    </View>
+            <View style={[s.rowInline, { gap: 12, flexWrap: 'wrap' }]}>
+                <Text style={s.syncCount}>
+                    {count} {recordsLabel(count)}
+                </Text>
+                <View style={{ flex: 1, minWidth: 130 }}>
+                    <Text style={s.cardTitle}>{count ? 'Не синхронізовано' : 'Усе синхронізовано'}</Text>
+                    <Text style={s.mutedSmall}>
+                        {syncing ? 'Триває передавання даних…' : 'Локальні дані на пристрої'}
+                    </Text>
                 </View>
-                <Text style={[s.statusPill, count ? s.statusPending : s.statusDone]}>{count ? 'Очікує' : 'Готово'}</Text>
             </View>
-            <Text style={s.mutedSmall}>Остання перевірка · {timeLabel()}</Text>
-            <Button variant="yellow" label={syncing ? 'Синхронізація…' : 'Синхронізувати записи'} disabled={syncing} onPress={onSync} />
+            <Text style={[s.mutedSmall, { marginTop: 12 }]}>
+                {count ? `Очікують синхронізації: ${count}` : 'Черга синхронізації порожня'}
+            </Text>
+            <Button
+                variant="yellow"
+                label={syncing ? 'Синхронізація…' : 'Синхронізувати записи'}
+                disabled={syncing}
+                onPress={onSync}
+            />
         </View>
     );
 }

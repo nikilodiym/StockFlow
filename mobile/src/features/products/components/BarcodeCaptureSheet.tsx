@@ -1,5 +1,7 @@
+import { useResponsiveStyles } from '../../../hooks/useResponsiveStyles';
 import React, { useRef } from 'react';
-import { Modal, Pressable, Text, View, StyleSheet } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, View, StyleSheet, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCameraPermissions } from 'expo-camera';
 import CameraView from '../../scanner/components/CameraView';
 import Icon from '../../../components/ui/Icon';
@@ -13,13 +15,17 @@ export default function BarcodeCaptureSheet({
     onClose: () => void;
     onCapture: (barcode: string) => void;
 }) {
+    const s = useResponsiveStyles(baseStyles);
+
     const [permission, requestPermission] = useCameraPermissions();
     const busy = useRef(false);
+    const { height } = useWindowDimensions();
+    const insets = useSafeAreaInsets();
     return (
         <Modal
             visible={visible}
             transparent
-            animationType="slide"
+            animationType="fade"
             onRequestClose={onClose}
             statusBarTranslucent
             onShow={() => {
@@ -28,7 +34,10 @@ export default function BarcodeCaptureSheet({
         >
             <View style={s.root}>
                 <Pressable style={s.scrim} onPress={onClose} />
-                <View style={s.sheet}>
+                <ScrollView
+                    style={[s.sheet, { maxHeight: height - insets.top - 12, flexGrow: 0 }]}
+                    contentContainerStyle={{ paddingBottom: insets.bottom }}
+                >
                     <View style={s.handle} />
                     <View style={s.heading}>
                         <Text style={s.title}>Штрихкод нового товару</Text>
@@ -48,16 +57,16 @@ export default function BarcodeCaptureSheet({
                             onClose();
                         }}
                     />
-                </View>
+                </ScrollView>
             </View>
         </Modal>
     );
 }
-const s = StyleSheet.create({
+const baseStyles = StyleSheet.create({
     root: { flex: 1, justifyContent: 'flex-end' },
     scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(18,26,23,.55)' },
     sheet: {
-        backgroundColor: '#F2F3F2',
+        backgroundColor: '#F3F3F1',
         padding: 16,
         paddingBottom: 32,
         borderTopLeftRadius: 18,
@@ -73,5 +82,5 @@ const s = StyleSheet.create({
     },
     heading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     title: { fontSize: 20, fontWeight: '600', color: '#182021' },
-    help: { fontSize: 14, lineHeight: 20, color: '#667085', marginVertical: 14 },
+    help: { fontSize: 14, lineHeight: 20, color: '#606876', marginVertical: 14 },
 });

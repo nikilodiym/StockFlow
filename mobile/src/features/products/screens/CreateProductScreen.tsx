@@ -1,3 +1,4 @@
+import { useResponsiveStyles } from '../../../hooks/useResponsiveStyles';
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View, StyleSheet } from 'react-native';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -15,6 +16,8 @@ import { ProductCreationService } from '../services/ProductCreationService';
 import BarcodeCaptureSheet from '../components/BarcodeCaptureSheet';
 
 export default function CreateProductScreen({ navigation, route }: RootScreenProps<'CreateProduct'>) {
+    const s = useResponsiveStyles(baseStyles);
+
     const db = useSQLiteContext();
     const { token, refreshToken } = useAuth();
     const { serverUrl } = useSettings();
@@ -126,12 +129,12 @@ export default function CreateProductScreen({ navigation, route }: RootScreenPro
         </ScreenContainer>
     );
 }
-const s = StyleSheet.create({
+const baseStyles = StyleSheet.create({
     body: { padding: 16, paddingBottom: 32 },
     card: { backgroundColor: '#fff', borderRadius: 16, padding: 16 },
     title: { fontSize: 20, fontWeight: '600', color: '#182021' },
-    help: { fontSize: 14, lineHeight: 20, color: '#667085', marginTop: 14 },
-    label: { fontSize: 14, color: '#667085', marginTop: 20, marginBottom: 8 },
+    help: { fontSize: 14, lineHeight: 20, color: '#606876', marginTop: 14 },
+    label: { fontSize: 14, color: '#606876', marginTop: 20, marginBottom: 8 },
     units: { flexDirection: 'row', backgroundColor: '#EEE', borderRadius: 12, padding: 5 },
     unit: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 10 },
     active: { backgroundColor: '#12715B' },

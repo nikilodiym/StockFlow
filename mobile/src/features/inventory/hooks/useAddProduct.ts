@@ -1,5 +1,5 @@
 /** Find a product by barcode / SKU / name and add it to the current document. */
-import * as Haptics from 'expo-haptics';
+import { ScanFeedbackService } from '../../scanner/services/ScanFeedbackService';
 import { useNavigation } from '@react-navigation/native';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useDialog } from '../../../app/providers/DialogProvider';
@@ -19,18 +19,15 @@ export function useAddProduct() {
     const { products } = useProducts();
     const { addItem, quantity } = useInventory();
     const { showDialog } = useDialog();
-    const { vibrationOn } = useSettings();
+    const { vibrationOn, soundOn } = useSettings();
     const navigation = useNavigation();
     const { requirePermission, reportError } = usePermissions();
-
-    const vibrate = (run: () => Promise<void>) => {
-        if (vibrationOn) void run().catch(() => undefined);
-    };
 
     const add = async (
         product: Product,
         amountText: string = quantity,
         unit: string = product.unit,
+        feedback = true,
     ): Promise<boolean> => {
         const amount = parseQuantity(amountText);
         if (amount === null) {
@@ -41,7 +38,7 @@ export function useAddProduct() {
             if (unit !== product.unit && !product.units?.some((u) => u.name === unit && u.factor > 0))
                 throw new Error('Для цього товару не налаштовано таку одиницю виміру.');
             await addItem({ ...product, unit }, amount);
-            vibrate(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
+            if (feedback) void ScanFeedbackService.play('success', { soundOn, vibrationOn });
             return true;
         } catch (error) {
             reportError(error, 'Не вдалося додати товар');
@@ -63,6 +60,7 @@ export function useAddProduct() {
                     : await ProductService.find(db, products, value);
             if (!product) {
                 if (source === 'scan') {
+                    void ScanFeedbackService.play('error', { soundOn, vibrationOn });
                     showDialog(
                         'Штрихкод не знайдено',
                         `У каталозі немає товару з кодом ${value}. Створити картку нового товару?`,
@@ -84,11 +82,11 @@ export function useAddProduct() {
                 }
                 return false;
             }
-            const added = await add(product);
-            if (added && source === 'scan')
-                vibrate(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
+            const added = await add(product, quantity, product.unit, false);
+            if (source === 'scan') void ScanFeedbackService.play(added ? 'success' : 'error', { soundOn, vibrationOn });
             return added;
         } catch (error) {
+            if (source === 'scan') void ScanFeedbackService.play('error', { soundOn, vibrationOn });
             showDialog('Помилка пошуку', getErrorMessage(error), undefined, 'error');
             return false;
         }

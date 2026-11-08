@@ -55,10 +55,13 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         setServerPort(port);
     }, []);
 
-    const applyServerUrl = useCallback(async (url: string) => {
-        showServer(url);
-        await SettingsService.saveServerUrl(url);
-    }, [showServer]);
+    const applyServerUrl = useCallback(
+        async (url: string) => {
+            showServer(url);
+            await SettingsService.saveServerUrl(url);
+        },
+        [showServer],
+    );
 
     useEffect(() => {
         let active = true;
@@ -66,6 +69,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
             const prefs = await SettingsService.load();
             if (!active) return;
             setAutoSync(prefs.autoSync);
+            setSoundOn(prefs.soundOn);
+            setVibrationOn(prefs.vibrationOn);
             setSyncInterval(prefs.syncInterval);
             setWarehouse(prefs.warehouse);
             // A saved address goes stale on another emulator or phone, so it is
@@ -75,8 +80,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
             if (!active || !found) return;
             showServer(found);
             if (found !== prefs.serverUrl) await SettingsService.saveServerUrl(found);
-        })().catch(error => console.error('Помилка завантаження налаштувань:', error));
-        return () => { active = false; };
+        })().catch((error) => console.error('Помилка завантаження налаштувань:', error));
+        return () => {
+            active = false;
+        };
     }, [showServer]);
 
     const chooseWarehouse = useCallback(async (value: string) => {
@@ -95,11 +102,66 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         await SettingsService.saveSyncInterval(value);
     }, []);
 
-    const value = useMemo<SettingsContextValue>(() => ({
-        serverUrl, serverHost, serverPort, setServerHost, setServerPort, applyServerUrl, online, setOnline,
-        onlineMode, setOnlineMode, warehouse, chooseWarehouse, autoSync, toggleAutoSync, syncInterval, chooseSyncInterval,
-        soundOn, toggleSound: () => setSoundOn(v => !v), vibrationOn, toggleVibration: () => setVibrationOn(v => !v),
-    }), [serverUrl, serverHost, serverPort, applyServerUrl, online, setOnline, onlineMode, warehouse, chooseWarehouse, autoSync, toggleAutoSync, syncInterval, chooseSyncInterval, soundOn, vibrationOn]);
+    const toggleSound = useCallback(() => {
+        const next = !soundOn;
+        setSoundOn(next);
+        void SettingsService.saveSound(next).catch((error) => {
+            setSoundOn(!next);
+            console.error(error);
+        });
+    }, [soundOn]);
+    const toggleVibration = useCallback(() => {
+        const next = !vibrationOn;
+        setVibrationOn(next);
+        void SettingsService.saveVibration(next).catch((error) => {
+            setVibrationOn(!next);
+            console.error(error);
+        });
+    }, [vibrationOn]);
+
+    const value = useMemo<SettingsContextValue>(
+        () => ({
+            serverUrl,
+            serverHost,
+            serverPort,
+            setServerHost,
+            setServerPort,
+            applyServerUrl,
+            online,
+            setOnline,
+            onlineMode,
+            setOnlineMode,
+            warehouse,
+            chooseWarehouse,
+            autoSync,
+            toggleAutoSync,
+            syncInterval,
+            chooseSyncInterval,
+            soundOn,
+            toggleSound,
+            vibrationOn,
+            toggleVibration,
+        }),
+        [
+            serverUrl,
+            serverHost,
+            serverPort,
+            applyServerUrl,
+            online,
+            setOnline,
+            onlineMode,
+            warehouse,
+            chooseWarehouse,
+            autoSync,
+            toggleAutoSync,
+            syncInterval,
+            chooseSyncInterval,
+            soundOn,
+            vibrationOn,
+            toggleSound,
+            toggleVibration,
+        ],
+    );
 
     return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }

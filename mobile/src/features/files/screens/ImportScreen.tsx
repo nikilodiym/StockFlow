@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ScrollView, Text, TextInput } from 'react-native';
 import { useSQLiteContext } from 'expo-sqlite';
-import s from '../../../constants/styles';
+import { useAppStyles } from '../../../constants/styles';
 import Button from '../../../components/ui/Button';
 import Header from '../../../components/layout/Header';
 import ScreenContainer from '../../../components/layout/ScreenContainer';
@@ -13,6 +13,8 @@ import { usePermissions } from '../../../hooks/usePermissions';
 
 /** Paste CSV with products: SKU, Barcode, Name, Unit, Stock. */
 export default function ImportScreen({ navigation }: RootScreenProps<'Import'>) {
+    const s = useAppStyles();
+
     const db = useSQLiteContext();
     const { reload } = useProducts();
     const { showDialog } = useDialog();

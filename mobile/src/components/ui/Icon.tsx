@@ -1,298 +1,46 @@
 import React from 'react';
-import { View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
+import reference from '../../assets/icons/reference-icons.json';
 
-export type IconName =
-    | 'home'
-    | 'file'
-    | 'folder'
-    | 'user'
-    | 'search'
-    | 'scan'
-    | 'warehouse'
-    | 'bell'
-    | 'settings'
-    | 'plus'
-    | 'back'
-    | 'download'
-    | 'upload'
-    | 'trash'
-    | 'share'
-    | 'zap'
-    | 'check'
-    | 'wifi'
-    | 'database'
-    | 'refresh'
-    | 'warning'
-    | 'close'
-    | 'chevron'
-    | 'minus'
-    | 'printer';
+const simple = {
+    plus: 'M12 5v14M5 12h14',
+    minus: 'M5 12h14',
+    close: 'M6 6l12 12M18 6L6 18',
+    chevron: 'M9 6l6 6-6 6',
+    chevronDown: 'M5 9l7 7 7-7',
+    upload: 'M12 16V3M7 8l5-5 5 5M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3',
+    share: 'M12 16V3M7 8l5-5 5 5M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3',
+    server: 'M4 2h16a2 2 0 012 2v5a2 2 0 01-2 2H4a2 2 0 01-2-2V4a2 2 0 012-2ZM4 13h16a2 2 0 012 2v5a2 2 0 01-2 2H4a2 2 0 01-2-2v-5a2 2 0 012-2ZM6 6h.01M6 17h.01',
+    port: 'M4 4h16a2 2 0 012 2v10h-4l-2 4H8l-2-4H2V6a2 2 0 012-2ZM6 7v3M10 7v3M14 7v3M18 7v3',
+    logout: 'M9 4H5a2 2 0 00-2 2v12a2 2 0 002 2h4M9 12h12M17 8l4 4-4 4',
+} as const;
+export type IconName = keyof typeof reference | keyof typeof simple;
 type Props = { name: IconName; size?: number; color?: string; strokeWidth?: number };
-type Segment = readonly [number, number, number, number, number?];
-const L = (x1: number, y1: number, x2: number, y2: number, width = 1.8): Segment => [x1, y1, x2, y2, width];
-
-const drawings: Record<IconName, Segment[]> = {
-    printer: [
-        L(7, 8, 7, 3),
-        L(7, 3, 17, 3),
-        L(17, 3, 17, 8),
-        L(4, 17, 3, 17),
-        L(3, 17, 3, 8),
-        L(3, 8, 21, 8),
-        L(21, 8, 21, 17),
-        L(21, 17, 18, 17),
-        L(7, 14, 17, 14),
-        L(17, 14, 17, 22),
-        L(17, 22, 7, 22),
-        L(7, 22, 7, 14),
-        L(17, 11, 18, 11),
-    ],
-    home: [
-        L(3, 10, 12, 3),
-        L(12, 3, 21, 10),
-        L(5, 9, 5, 20),
-        L(19, 9, 19, 20),
-        L(5, 20, 19, 20),
-        L(9, 20, 9, 14),
-        L(9, 14, 15, 14),
-        L(15, 14, 15, 20),
-    ],
-    file: [
-        L(6, 3, 13, 3),
-        L(13, 3, 20, 9),
-        L(20, 9, 20, 20),
-        L(20, 20, 4, 20),
-        L(4, 20, 4, 5),
-        L(4, 5, 6, 3),
-        L(13, 3, 13, 9),
-        L(13, 9, 20, 9),
-        L(8, 14, 16, 14),
-        L(8, 17, 14, 17),
-    ],
-    folder: [
-        L(3, 6, 9, 6),
-        L(9, 6, 11, 8),
-        L(11, 8, 21, 8),
-        L(21, 8, 20, 19),
-        L(20, 19, 4, 19),
-        L(4, 19, 3, 6),
-        L(9, 14, 15, 14),
-    ],
-    user: [
-        L(8, 8, 8, 7),
-        L(8, 7, 10, 4),
-        L(10, 4, 14, 4),
-        L(14, 4, 16, 7),
-        L(16, 7, 16, 8),
-        L(16, 8, 14, 11),
-        L(14, 11, 10, 11),
-        L(10, 11, 8, 8),
-        L(4, 21, 6, 16),
-        L(6, 16, 9, 15),
-        L(9, 15, 15, 15),
-        L(15, 15, 18, 16),
-        L(18, 16, 20, 21),
-    ],
-    search: [
-        L(15, 15, 21, 21),
-        L(4, 10, 4, 8),
-        L(4, 8, 6, 5),
-        L(6, 5, 9, 4),
-        L(9, 4, 12, 4),
-        L(12, 4, 15, 6),
-        L(15, 6, 17, 9),
-        L(17, 9, 17, 12),
-        L(17, 12, 15, 15),
-        L(15, 15, 12, 17),
-        L(12, 17, 9, 17),
-        L(9, 17, 6, 15),
-        L(6, 15, 4, 12),
-        L(4, 12, 4, 10),
-    ],
-    scan: [
-        L(8, 4, 5, 4),
-        L(5, 4, 4, 5),
-        L(4, 5, 4, 8),
-        L(16, 4, 19, 4),
-        L(19, 4, 20, 5),
-        L(20, 5, 20, 8),
-        L(4, 16, 4, 19),
-        L(4, 19, 5, 20),
-        L(5, 20, 8, 20),
-        L(16, 20, 19, 20),
-        L(19, 20, 20, 19),
-        L(20, 19, 20, 16),
-        L(7, 12, 17, 12, 2.2),
-        L(10, 9, 10, 15),
-        L(14, 9, 14, 15),
-    ],
-    warehouse: [
-        L(3, 10, 12, 3),
-        L(12, 3, 21, 10),
-        L(4, 9, 4, 20),
-        L(4, 20, 20, 20),
-        L(20, 20, 20, 9),
-        L(9, 20, 9, 14),
-        L(9, 14, 15, 14),
-        L(15, 14, 15, 20),
-    ],
-    bell: [
-        L(6, 9, 6, 12),
-        L(6, 12, 4, 17),
-        L(4, 17, 20, 17),
-        L(20, 17, 18, 12),
-        L(18, 12, 18, 9),
-        L(18, 9, 16, 5),
-        L(16, 5, 13, 4),
-        L(13, 4, 10, 4),
-        L(10, 4, 7, 6),
-        L(7, 6, 6, 9),
-        L(10, 20, 14, 20),
-    ],
-    settings: [
-        L(10, 2, 14, 2),
-        L(14, 2, 14.5, 5),
-        L(14.5, 5, 17, 6),
-        L(17, 6, 19.5, 4.8),
-        L(19.5, 4.8, 21.5, 8),
-        L(21.5, 8, 20, 10),
-        L(20, 10, 21, 12),
-        L(21, 12, 20, 14),
-        L(20, 14, 21.5, 16),
-        L(21.5, 16, 19.5, 19.2),
-        L(19.5, 19.2, 17, 18),
-        L(17, 18, 14.5, 19),
-        L(14.5, 19, 14, 21.5),
-        L(14, 21.5, 10, 21.5),
-        L(10, 21.5, 9.5, 19),
-        L(9.5, 19, 7, 18),
-        L(7, 18, 4.5, 19.2),
-        L(4.5, 19.2, 2.5, 16),
-        L(2.5, 16, 4, 14),
-        L(4, 14, 3, 12),
-        L(3, 12, 4, 10),
-        L(4, 10, 2.5, 8),
-        L(2.5, 8, 4.5, 4.8),
-        L(4.5, 4.8, 7, 6),
-        L(7, 6, 9.5, 5),
-        L(9.5, 5, 10, 2),
-        L(9, 9, 12, 8),
-        L(12, 8, 15, 9),
-        L(15, 9, 16, 12),
-        L(16, 12, 15, 15),
-        L(15, 15, 12, 16),
-        L(12, 16, 9, 15),
-        L(9, 15, 8, 12),
-        L(8, 12, 9, 9),
-    ],
-    plus: [L(12, 5, 12, 19, 2), L(5, 12, 19, 12, 2)],
-    minus: [L(5, 12, 19, 12, 2)],
-    back: [L(15, 6, 9, 12), L(9, 12, 15, 18), L(9, 12, 21, 12)],
-    download: [
-        L(12, 3, 12, 15),
-        L(7, 10, 12, 15),
-        L(12, 15, 17, 10),
-        L(5, 17, 5, 21),
-        L(5, 21, 19, 21),
-        L(19, 21, 19, 17),
-    ],
-    upload: [L(12, 15, 12, 3), L(7, 8, 12, 3), L(12, 3, 17, 8), L(5, 17, 5, 21), L(5, 21, 19, 21), L(19, 21, 19, 17)],
-    trash: [
-        L(3, 6, 21, 6),
-        L(6, 6, 7, 21),
-        L(7, 21, 17, 21),
-        L(17, 21, 18, 6),
-        L(9, 6, 9, 4),
-        L(9, 4, 15, 4),
-        L(15, 4, 15, 6),
-        L(10, 10, 10, 17),
-        L(14, 10, 14, 17),
-    ],
-    share: [L(12, 15, 12, 3), L(7, 8, 12, 3), L(12, 3, 17, 8), L(5, 16, 5, 21), L(5, 21, 19, 21), L(19, 21, 19, 16)],
-    zap: [L(14, 2, 6, 13), L(6, 13, 12, 13), L(12, 13, 10, 22), L(10, 22, 18, 10), L(18, 10, 12, 10), L(12, 10, 14, 2)],
-    check: [L(5, 12, 10, 17), L(10, 17, 20, 6)],
-    wifi: [
-        L(4, 9, 7, 7),
-        L(7, 7, 12, 6),
-        L(12, 6, 17, 7),
-        L(17, 7, 20, 9),
-        L(8, 13, 10, 12),
-        L(10, 12, 14, 12),
-        L(14, 12, 16, 13),
-        L(11, 17, 13, 17),
-    ],
-    database: [
-        L(4, 6, 5, 4),
-        L(5, 4, 12, 3),
-        L(12, 3, 19, 4),
-        L(19, 4, 20, 6),
-        L(20, 6, 19, 8),
-        L(19, 8, 12, 9),
-        L(12, 9, 5, 8),
-        L(5, 8, 4, 6),
-        L(4, 6, 4, 18),
-        L(4, 18, 5, 20),
-        L(5, 20, 12, 21),
-        L(12, 21, 19, 20),
-        L(19, 20, 20, 18),
-        L(20, 18, 20, 6),
-        L(4, 12, 5, 14),
-        L(5, 14, 12, 15),
-        L(12, 15, 19, 14),
-        L(19, 14, 20, 12),
-    ],
-    refresh: [
-        L(20, 5, 20, 11),
-        L(20, 11, 14, 11),
-        L(4, 19, 4, 13),
-        L(4, 13, 10, 13),
-        L(6, 9, 8, 6),
-        L(8, 6, 12, 4),
-        L(12, 4, 16, 5),
-        L(16, 5, 19, 8),
-        L(18, 15, 16, 18),
-        L(16, 18, 12, 20),
-        L(12, 20, 8, 19),
-        L(8, 19, 5, 16),
-    ],
-    warning: [
-        L(10, 4, 3, 17),
-        L(3, 17, 4, 20),
-        L(4, 20, 20, 20),
-        L(20, 20, 21, 17),
-        L(21, 17, 14, 4),
-        L(14, 4, 10, 4),
-        L(12, 9, 12, 14),
-        L(12, 17, 12.2, 17),
-    ],
-    close: [L(6, 6, 18, 18), L(18, 6, 6, 18)],
-    chevron: [L(9, 6, 15, 12), L(15, 12, 9, 18)],
-};
-
-/** Consistent line icons drawn in native views, with no fonts or extra packages. */
-export default function Icon({ name, size = 22, color = '#1F2823', strokeWidth = 1.8 }: Props) {
-    const scale = size / 24;
+/** Original curves from the WareGo mockups, rendered as scalable vectors. */
+export default function Icon({ name, size = 24, color = '#182021', strokeWidth }: Props) {
+    const original = (reference as Record<string, { viewBox: string; paths: { d: string; width: number }[] }>)[name];
     return (
-        <View accessibilityLabel={name} style={{ width: size, height: size }}>
-            {drawings[name].map(([x1, y1, x2, y2, baseWidth = 1.8], index) => {
-                const lineWidth = (baseWidth * strokeWidth) / 1.8;
-                const length = Math.max(Math.hypot(x2 - x1, y2 - y1), lineWidth);
-                return (
-                    <View
-                        key={`${name}-${index}`}
-                        style={{
-                            position: 'absolute',
-                            left: ((x1 + x2) / 2 - length / 2) * scale,
-                            top: ((y1 + y2) / 2 - lineWidth / 2) * scale,
-                            width: length * scale,
-                            height: lineWidth * scale,
-                            borderRadius: (lineWidth * scale) / 2,
-                            backgroundColor: color,
-                            transform: [{ rotate: `${Math.atan2(y2 - y1, x2 - x1)}rad` }],
-                        }}
+        <Svg width={size} height={size} viewBox={original?.viewBox ?? '0 0 24 24'} fill="none" accessible={false}>
+            {original ? (
+                original.paths.map((p, i) => (
+                    <Path
+                        key={i}
+                        d={p.d}
+                        stroke={color}
+                        strokeWidth={strokeWidth ?? p.width}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
                     />
-                );
-            })}
-        </View>
+                ))
+            ) : (
+                <Path
+                    d={simple[name as keyof typeof simple]}
+                    stroke={color}
+                    strokeWidth={strokeWidth ?? 1.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                />
+            )}
+        </Svg>
     );
 }

@@ -1,12 +1,17 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
-import s from '../../../constants/styles';
+import { useAppStyles } from '../../../constants/styles';
 import type { AuthMode } from '../types/auth.types';
 
-const MODES: [AuthMode, string][] = [['pin', 'PIN-код'], ['email', 'Email + пароль']];
+const MODES: [AuthMode, string][] = [
+    ['pin', 'PIN-код'],
+    ['email', 'Email + пароль'],
+];
 
 /** Switch between PIN and email login. */
 export default function AuthModeTabs({ mode, onChange }: { mode: AuthMode; onChange: (mode: AuthMode) => void }) {
+    const s = useAppStyles();
+
     return (
         <View style={s.authTabs}>
             {MODES.map(([key, label]) => (

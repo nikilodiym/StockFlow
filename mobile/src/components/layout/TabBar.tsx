@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import s from '../../constants/styles';
+import { useAppStyles } from '../../constants/styles';
 import { colors } from '../../constants/colors';
 import Icon, { type IconName } from '../ui/Icon';
 
@@ -15,6 +15,8 @@ const TABS: Record<string, { icon: IconName; label: string }> = {
 
 /** Bottom navigation in the WareGo style (replaces the default tab bar). */
 export default function TabBar({ state, navigation }: BottomTabBarProps) {
+    const s = useAppStyles();
+
     const insets = useSafeAreaInsets();
     return (
         <View style={[s.bottom, { paddingBottom: Math.max(insets.bottom, 8) }]}>
@@ -29,12 +31,16 @@ export default function TabBar({ state, navigation }: BottomTabBarProps) {
                         accessibilityState={{ selected: active }}
                         style={s.navItem}
                         onPress={() => {
-                            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+                            const event = navigation.emit({
+                                type: 'tabPress',
+                                target: route.key,
+                                canPreventDefault: true,
+                            });
                             if (!active && !event.defaultPrevented) navigation.navigate(route.name);
                         }}
                     >
                         <View style={[s.navIconWrap, active && s.navIconWrapActive]}>
-                            <Icon name={tab.icon} size={22} color={active ? colors.primary : colors.muted} />
+                            <Icon name={tab.icon} size={24} color={active ? colors.primary : colors.black} />
                         </View>
                         <Text style={[s.navLabel, active && s.navSelected]}>{tab.label}</Text>
                     </Pressable>

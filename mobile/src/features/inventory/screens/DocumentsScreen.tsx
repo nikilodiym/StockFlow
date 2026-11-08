@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import s from '../../../constants/styles';
+import { useAppStyles } from '../../../constants/styles';
 import { colors } from '../../../constants/colors';
 import Button from '../../../components/ui/Button';
 import Icon from '../../../components/ui/Icon';
@@ -19,6 +19,8 @@ import type { DateFilter, DocumentType, SavedDocument, StatusFilter } from '../t
 
 /** Documents tab: filters, saved documents of the selected type, current document. */
 export default function DocumentsScreen() {
+    const s = useAppStyles();
+
     const navigation = useNavigation();
     const { warehouse } = useSettings();
     const { docType, setDocType, savedDocs, items, refreshDocs, changeItemQuantity, createDraft } = useInventory();
@@ -81,13 +83,20 @@ export default function DocumentsScreen() {
                         <Button label="＋ Створити документ" onPress={newDoc} />
                     </View>
                 )}
-                <Text style={s.sectionLabel}>ПОТОЧНИЙ ДОКУМЕНТ · {items.length}</Text>
-                <DocumentItemList items={items} onChange={(item, delta) => void changeItemQuantity(item, delta)} />
-                <Button
-                    variant="scan"
-                    label="Відкрити поточний документ"
-                    onPress={() => navigation.navigate('DocumentDetail', {})}
-                />
+                {items.length > 0 && (
+                    <>
+                        <Text style={s.sectionLabel}>Поточний документ · {items.length}</Text>
+                        <DocumentItemList
+                            items={items}
+                            onChange={(item, delta) => void changeItemQuantity(item, delta)}
+                        />
+                        <Button
+                            variant="scan"
+                            label="Відкрити поточний документ"
+                            onPress={() => navigation.navigate('DocumentDetail', {})}
+                        />
+                    </>
+                )}
             </ScrollView>
             <Pressable accessibilityLabel="Новий документ" style={s.fab} onPress={newDoc}>
                 <Icon name="plus" size={25} color={colors.textStrong} strokeWidth={2.2} />

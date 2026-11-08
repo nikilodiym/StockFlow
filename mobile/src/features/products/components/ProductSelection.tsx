@@ -1,5 +1,6 @@
+import { useResponsiveStyles } from '../../../hooks/useResponsiveStyles';
 import React from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '../../../components/ui/Icon';
 import type { Product } from '../types/product.types';
@@ -24,13 +25,20 @@ export default function ProductSelection({
     onUnit,
     onAdd,
 }: Props) {
+    const s = useResponsiveStyles(baseStyles);
+
     const insets = useSafeAreaInsets();
+    const { height } = useWindowDimensions();
     const available = [product.unit, ...(product.units ?? []).filter((u) => u.factor > 0).map((u) => u.name)];
     const options = [...new Set([...['шт', 'кг', 'упак'], ...available])];
     const change = (delta: number) =>
         onQuantity(String(Math.max(1, (Number(quantity.replace(',', '.')) || 1) + delta)));
     return (
-        <View style={[s.sheet, { paddingBottom: Math.max(16, insets.bottom) }]}>
+        <ScrollView
+            style={{ maxHeight: height * 0.62, flexGrow: 0 }}
+            contentContainerStyle={[s.sheet, { paddingBottom: Math.max(16, insets.bottom) }]}
+            keyboardShouldPersistTaps="handled"
+        >
             <View style={s.heading}>
                 <Text style={s.name}>{product.name}</Text>
                 <Text style={s.stock}>
@@ -80,24 +88,24 @@ export default function ProductSelection({
                 <Icon name="plus" size={22} color="#fff" />
                 <Text style={s.addText}>{busy ? 'Додавання…' : 'Додати в документ'}</Text>
             </Pressable>
-        </View>
+        </ScrollView>
     );
 }
-const s = StyleSheet.create({
+const baseStyles = StyleSheet.create({
     sheet: { backgroundColor: '#fff', borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: 16, paddingTop: 24 },
     heading: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
-    name: { fontSize: 16, fontWeight: '500', color: '#101214', flex: 1 },
-    stock: { fontSize: 15, color: '#667085', flexShrink: 1, textAlign: 'right' },
-    code: { fontSize: 12, color: '#667085', marginTop: 6 },
-    label: { fontSize: 12, color: '#667085', marginTop: 24, marginBottom: 8 },
+    name: { fontSize: 16, fontWeight: '500', color: '#0E0F10', flex: 1 },
+    stock: { fontSize: 15, color: '#606876', flexShrink: 1, textAlign: 'right' },
+    code: { fontSize: 12, color: '#606876', marginTop: 6 },
+    label: { fontSize: 12, color: '#606876', marginTop: 24, marginBottom: 8 },
     units: { flexDirection: 'row', padding: 5, borderRadius: 12, backgroundColor: '#EEE' },
     unit: { flex: 1, minHeight: 42, justifyContent: 'center', alignItems: 'center', borderRadius: 10 },
     activeUnit: { backgroundColor: '#12715B' },
-    unitText: { fontSize: 16, color: '#087B68' },
+    unitText: { fontSize: 16, color: '#12715B' },
     quantity: {
         height: 56,
         borderRadius: 12,
-        borderColor: '#E6E8E7',
+        borderColor: '#DEE4E1',
         borderWidth: 1,
         padding: 5,
         flexDirection: 'row',
@@ -115,7 +123,7 @@ const s = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: 10,
-        backgroundColor: '#D8F2E4',
+        backgroundColor: '#D7F2E1',
         alignItems: 'center',
         justifyContent: 'center',
     },

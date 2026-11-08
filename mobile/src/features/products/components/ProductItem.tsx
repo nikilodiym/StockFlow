@@ -1,3 +1,4 @@
+import { useResponsiveStyles } from '../../../hooks/useResponsiveStyles';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Product } from '../types/product.types';
@@ -10,6 +11,8 @@ export default function ProductItem({
     onPress: (product: Product) => void;
     selected?: boolean;
 }) {
+    const s = useResponsiveStyles(baseStyles);
+
     const badge = product.sku.split('-')[0].slice(0, 3).toUpperCase() || 'SKU';
     return (
         <Pressable
@@ -35,7 +38,7 @@ export default function ProductItem({
         </Pressable>
     );
 }
-const s = StyleSheet.create({
+const baseStyles = StyleSheet.create({
     row: {
         minHeight: 68,
         padding: 12,
@@ -48,18 +51,18 @@ const s = StyleSheet.create({
         gap: 10,
         marginBottom: 8,
     },
-    selected: { borderColor: '#147D68', backgroundColor: '#D8F2E4' },
+    selected: { borderColor: '#147D68', backgroundColor: '#D7F2E1' },
     badge: {
         width: 44,
         height: 44,
         borderRadius: 12,
-        backgroundColor: '#D8F2E4',
+        backgroundColor: '#D7F2E1',
         alignItems: 'center',
         justifyContent: 'center',
     },
     badgeText: { fontSize: 14, fontWeight: '500', color: '#12715B' },
-    name: { fontSize: 16, fontWeight: '500', color: '#0E1112' },
-    code: { fontSize: 12, color: '#667085', marginTop: 5 },
+    name: { fontSize: 16, fontWeight: '500', color: '#0E0F10' },
+    code: { fontSize: 12, color: '#606876', marginTop: 5 },
     radio: {
         width: 25,
         height: 25,

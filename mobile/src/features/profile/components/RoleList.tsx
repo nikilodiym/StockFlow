@@ -1,6 +1,6 @@
 import React from 'react';
 import { Text, View } from 'react-native';
-import s from '../../../constants/styles';
+import { useAppStyles } from '../../../constants/styles';
 import { useAuth } from '../../../app/providers/AuthProvider';
 import { useSettings } from '../../../app/providers/SettingsProvider';
 import { roleOn } from '../../auth/services/PermissionService';
@@ -12,24 +12,26 @@ const ROLES: [string, string][] = [
     ['Адміністратор', 'Налаштування та керування доступом'],
 ];
 
-/** Access levels; the first one is the current user's. */
+/** Access levels; the badge follows the user's actual warehouse membership. */
 export default function RoleList() {
+    const s = useAppStyles();
+
     const { user } = useAuth();
     const { warehouse } = useSettings();
     const role = roleOn(user, warehouseId(warehouse));
     const selected = role === 'admin' ? 2 : role === 'manager' ? 1 : role === 'worker' ? 0 : -1;
     return (
         <>
-            <Text style={s.sectionLabel}>РІВНІ ДОСТУПУ</Text>
+            <Text style={s.sectionLabel}>Ролі та доступ</Text>
             {ROLES.map(([role, description], i) => (
                 <View key={role} style={s.roleCard}>
-                    <View>
+                    <View style={s.rowBetween}>
                         <Text style={s.productName}>{role}</Text>
-                        <Text style={s.mutedSmall}>{description}</Text>
+                        <Text style={[s.statusPill, i === selected ? s.statusDone : undefined]}>
+                            {i === selected ? 'Ваш рівень' : 'Інший рівень'}
+                        </Text>
                     </View>
-                    <Text style={[s.statusPill, i === selected ? s.statusDone : s.statusPending]}>
-                        {i === selected ? 'Ваш рівень' : 'Перегляд'}
-                    </Text>
+                    <Text style={s.mutedSmall}>{description}</Text>
                 </View>
             ))}
         </>

@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import s from '../../../constants/styles';
+import { useAppStyles } from '../../../constants/styles';
 import { colors } from '../../../constants/colors';
 import Icon from '../../../components/ui/Icon';
 import ScreenContainer from '../../../components/layout/ScreenContainer';
@@ -20,13 +20,17 @@ import QuickAccess, { type QuickTarget } from '../components/QuickAccess';
 import ShiftStats from '../components/ShiftStats';
 import SyncCard from '../components/SyncCard';
 import { useScanDestination } from '../../inventory/hooks/useScanDestination';
+import { roleOn } from '../../auth/services/PermissionService';
+import { warehouseId } from '../../inventory/services/DocumentService';
 import { useDocumentPrinting } from '../../inventory/hooks/useDocumentPrinting';
 
 /** Home tab: shortcuts, online mode, sync, current document, latest documents, shift stats. */
 export default function HomeScreen() {
+    const s = useAppStyles();
+
     const navigation = useNavigation();
     const { width } = useWindowDimensions();
-    const { userName } = useAuth();
+    const { userName, user } = useAuth();
     const { warehouse, online, onlineMode, setOnlineMode } = useSettings();
     const { syncing, sync, notificationsRead } = useSync();
     const { products } = useProducts();
@@ -65,6 +69,11 @@ export default function HomeScreen() {
             <HomeHeader
                 warehouse={warehouse}
                 userName={userName}
+                role={
+                    { admin: 'Адміністратор', manager: 'Менеджер', worker: 'Комірник' }[
+                        roleOn(user, warehouseId(warehouse)) ?? 'worker'
+                    ]
+                }
                 hasUnread={outboxCount > 0 && !notificationsRead}
                 onWarehouse={pickWarehouse}
                 onNotifications={() => navigation.navigate('Notifications')}
@@ -72,9 +81,10 @@ export default function HomeScreen() {
                 onPrint={printing.open}
             />
             <ScrollView contentContainerStyle={s.homeBody} keyboardShouldPersistTaps="handled">
+                <Text style={[s.cardTitle, { marginBottom: 12 }]}>Пошук товару</Text>
                 <Pressable style={s.searchBar} onPress={() => navigation.navigate('Search')}>
                     <Text style={s.searchPlaceholder}>Назва, SKU або штрихкод</Text>
-                    <Icon name="search" size={19} color={colors.mutedIcon} />
+                    <Icon name="search" size={24} color={colors.mutedIcon} />
                 </Pressable>
                 <QuickAccess compact={width < 380} onOpen={open} />
                 <OnlineModeCard onlineMode={onlineMode} online={online} onToggle={() => setOnlineMode((v) => !v)} />
@@ -86,15 +96,15 @@ export default function HomeScreen() {
                     onScan={destination.open}
                 />
                 <View style={s.sectionHeading}>
-                    <Text style={s.sectionLabel}>АКТИВНІ ДОКУМЕНТИ</Text>
+                    <Text style={s.sectionLabel}>Активні документи</Text>
                     <Pressable onPress={() => open('docs')}>
                         <Text style={s.linkText}>Усі</Text>
                     </Pressable>
                 </View>
-                {savedDocs.slice(0, 2).map((doc) => (
+                {savedDocs.slice(0, 5).map((doc) => (
                     <DocumentCard key={doc.id} doc={doc} warehouse={warehouse} onPress={openDoc} />
                 ))}
-                <Text style={s.sectionLabel}>ВАША ЗМІНА</Text>
+                <Text style={s.sectionLabel}>Ваша зміна</Text>
                 <ShiftStats scans={products.length} documents={savedDocs.length} />
                 <Text style={s.shiftTime}>08:00–20:00</Text>
             </ScrollView>

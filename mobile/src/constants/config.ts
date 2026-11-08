@@ -40,6 +40,8 @@ export const STORAGE_KEYS = {
     serverUrl: 'serverUrl',
     user: 'sf_user',
     autoSync: 'sf_auto_sync',
+    soundOn: 'sf_scanner_sound',
+    vibrationOn: 'sf_scanner_vibration',
     syncInterval: 'sf_sync_interval',
     warehouse: 'sf_warehouse',
     pullCursor: 'sf_pull_cursor',

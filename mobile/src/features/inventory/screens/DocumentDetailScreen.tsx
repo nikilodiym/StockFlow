@@ -1,3 +1,4 @@
+import { useResponsiveStyles } from '../../../hooks/useResponsiveStyles';
 import React, { useCallback, useState } from 'react';
 import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -20,6 +21,8 @@ import { documentLabel, totalQuantity, TYPE_LABEL } from '../services/DocumentSe
 import type { DocumentItem } from '../types/document.types';
 
 export default function DocumentDetailScreen({ navigation, route }: RootScreenProps<'DocumentDetail'>) {
+    const s = useResponsiveStyles(baseStyles);
+
     const docId = route.params?.docId;
     const { warehouse } = useSettings();
     const {
@@ -192,7 +195,7 @@ export default function DocumentDetailScreen({ navigation, route }: RootScreenPr
         </ScreenContainer>
     );
 }
-const s = StyleSheet.create({
+const baseStyles = StyleSheet.create({
     actions: { flexDirection: 'row', gap: 8 },
     body: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 20, flexGrow: 1 },
     heading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
@@ -202,21 +205,21 @@ const s = StyleSheet.create({
     status: {
         fontSize: 10,
         color: '#A98312',
-        backgroundColor: '#FFF2CC',
+        backgroundColor: '#FFF3CC',
         paddingHorizontal: 6,
         paddingVertical: 3,
         borderRadius: 5,
         overflow: 'hidden',
     },
-    conflict: { color: '#DF4949', backgroundColor: '#FDE2E2' },
-    synced: { color: '#16816A', backgroundColor: '#D8F2E4' },
-    warehouse: { fontSize: 11, color: '#667085' },
+    conflict: { color: '#D64545', backgroundColor: '#FDE2E2' },
+    synced: { color: '#16816A', backgroundColor: '#D7F2E1' },
+    warehouse: { fontSize: 11, color: '#606876' },
     stats: { flexDirection: 'row', gap: 16, backgroundColor: '#fff', padding: 16, borderRadius: 14, marginTop: 16 },
-    statLabel: { fontSize: 11, color: '#667085' },
-    statValue: { fontSize: 20, fontWeight: '600', color: '#172222', marginTop: 6 },
-    label: { fontSize: 12, color: '#667085', marginTop: 18, marginBottom: 8 },
+    statLabel: { fontSize: 11, color: '#606876' },
+    statValue: { fontSize: 20, fontWeight: '600', color: '#182021', marginTop: 6 },
+    label: { fontSize: 12, color: '#606876', marginTop: 18, marginBottom: 8 },
     empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 70 },
-    emptyText: { fontSize: 14, color: '#667085', marginTop: 6 },
+    emptyText: { fontSize: 14, color: '#606876', marginTop: 6 },
     link: { fontSize: 14, color: '#12715B', marginTop: 6 },
     footer: { paddingHorizontal: 16, paddingBottom: 12 },
 });

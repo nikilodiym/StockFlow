@@ -1,3 +1,4 @@
+import { useResponsiveStyles } from '../../../hooks/useResponsiveStyles';
 import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -18,6 +19,8 @@ import { filterProducts, ProductService } from '../services/ProductService';
 import type { Product } from '../types/product.types';
 
 export default function SearchScreen({ navigation, route }: RootScreenProps<'Search'>) {
+    const s = useResponsiveStyles(baseStyles);
+
     const db = useSQLiteContext();
     const { products } = useProducts();
     const { add } = useAddProduct();
@@ -104,7 +107,7 @@ export default function SearchScreen({ navigation, route }: RootScreenProps<'Sea
                         accessibilityLabel="Пошук за SKU або назвою"
                         style={s.input}
                         placeholder="Наприклад, PNT або фарба"
-                        placeholderTextColor="#667085"
+                        placeholderTextColor="#606876"
                         value={query}
                         onChangeText={(v) => {
                             setQuery(v);
@@ -117,7 +120,7 @@ export default function SearchScreen({ navigation, route }: RootScreenProps<'Sea
                             accessibilityLabel="Штрих-код"
                             style={[s.input, barcodeError && s.invalid]}
                             placeholder="13 цифр"
-                            placeholderTextColor="#667085"
+                            placeholderTextColor="#606876"
                             keyboardType="default"
                             autoCapitalize="none"
                             autoCorrect={false}
@@ -134,7 +137,7 @@ export default function SearchScreen({ navigation, route }: RootScreenProps<'Sea
                             style={s.lookup}
                             onPress={() => void lookup()}
                         >
-                            <Icon name="search" size={20} color="#667085" />
+                            <Icon name="search" size={20} color="#606876" />
                         </Pressable>
                     </View>
                     {barcodeError && (
@@ -187,17 +190,17 @@ export default function SearchScreen({ navigation, route }: RootScreenProps<'Sea
         </ScreenContainer>
     );
 }
-const s = StyleSheet.create({
+const baseStyles = StyleSheet.create({
     body: { paddingHorizontal: 16, paddingBottom: 20 },
     heading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, gap: 12 },
     title: { fontSize: 22, fontWeight: '500', color: '#182021' },
     document: { fontSize: 22, fontWeight: '500', color: '#182021' },
     choose: { fontSize: 13, fontWeight: '500', color: '#12715B' },
-    label: { fontSize: 14, color: '#667085', marginTop: 14, marginBottom: 8 },
+    label: { fontSize: 14, color: '#606876', marginTop: 14, marginBottom: 8 },
     input: {
         height: 44,
         borderWidth: 1,
-        borderColor: '#E8EAE9',
+        borderColor: '#DEE4E1',
         backgroundColor: '#fff',
         borderRadius: 12,
         paddingHorizontal: 12,
@@ -205,13 +208,13 @@ const s = StyleSheet.create({
         fontSize: 17,
         color: '#111',
     },
-    invalid: { borderColor: '#E54D4D' },
+    invalid: { borderColor: '#D64545' },
     lookup: { position: 'absolute', right: 12, top: 11 },
     results: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 16 },
     resultsTitle: { fontSize: 16, fontWeight: '500', color: '#111' },
-    count: { fontSize: 16, color: '#087F6A', fontWeight: '500' },
-    error: { fontSize: 12, color: '#D94C4C', marginTop: 6 },
+    count: { fontSize: 16, color: '#12715B', fontWeight: '500' },
+    error: { fontSize: 12, color: '#D64545', marginTop: 6 },
     createLink: { fontSize: 14, color: '#12715B', marginTop: 12 },
     empty: { paddingTop: 92, alignItems: 'center' },
-    emptyText: { fontSize: 12, color: '#667085' },
+    emptyText: { fontSize: 12, color: '#606876' },
 });

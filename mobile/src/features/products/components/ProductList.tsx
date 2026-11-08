@@ -1,13 +1,21 @@
 import React from 'react';
 import { Text, View } from 'react-native';
-import s from '../../../constants/styles';
+import { useAppStyles } from '../../../constants/styles';
 import { colors } from '../../../constants/colors';
 import Icon from '../../../components/ui/Icon';
 import type { Product } from '../types/product.types';
 import ProductItem from './ProductItem';
 
 /** Products list with an empty state. */
-export default function ProductList({ products, onSelect }: { products: Product[]; onSelect: (product: Product) => void }) {
+export default function ProductList({
+    products,
+    onSelect,
+}: {
+    products: Product[];
+    onSelect: (product: Product) => void;
+}) {
+    const s = useAppStyles();
+
     if (products.length === 0) {
         return (
             <View style={s.emptyState}>
@@ -17,5 +25,11 @@ export default function ProductList({ products, onSelect }: { products: Product[
             </View>
         );
     }
-    return <>{products.map(product => <ProductItem key={product.id} product={product} onPress={onSelect} />)}</>;
+    return (
+        <>
+            {products.map((product) => (
+                <ProductItem key={product.id} product={product} onPress={onSelect} />
+            ))}
+        </>
+    );
 }
