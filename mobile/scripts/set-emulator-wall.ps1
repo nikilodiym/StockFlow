@@ -2,7 +2,7 @@ param([string]$ProjectRoot='C:\Users\Admin\OneDrive\Desktop\StockFlow')
 $ErrorActionPreference='Stop'
 $emulatorExe=Join-Path $env:LOCALAPPDATA 'Android\Sdk\emulator\emulator.exe'
 $adbExe=Join-Path $env:LOCALAPPDATA 'Android\Sdk\platform-tools\adb.exe'
-$asset=Join-Path $ProjectRoot 'mobile\assets\emulator-test-ean13.png'
+$asset=Join-Path $ProjectRoot 'mobile\src\assets\images\emulator-test-ean13.png'
 $avdName='Medium_Phone_API_37.0'
 if (!(Test-Path $asset)) { throw "Barcode image missing: $asset" }
 $env:ANDROID_AVD_HOME=Join-Path $env:USERPROFILE '.android\avd'

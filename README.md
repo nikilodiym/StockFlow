@@ -36,12 +36,13 @@ Swagger: `http://localhost:8000/api/docs/`, Browsable API: будь-яка `http
 
 ## Мобільний клієнт
 
-Запускайте Expo з папки `mobile`, щоб він використовував `expo-router/entry`:
+Архітектура (feature-based) і деталі — у [mobile/README.md](mobile/README.md). Запуск з папки `mobile`:
 
 ```powershell
 cd mobile
 npm install
 npx expo start
+npm test   # тести мобільного застосунку
 ```
 
 Або з кореня репозиторію запустіть `npm run mobile`.
