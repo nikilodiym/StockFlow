@@ -14,12 +14,6 @@
     },
     "plugins": [
       [
-        "expo-router",
-        {
-          "root": "./app"
-        }
-      ],
-      [
         "expo-camera",
         {
           "cameraPermission": "StockFlow використовує камеру для сканування штрих-кодів."
@@ -27,10 +21,8 @@
       ],
       "expo-sqlite",
       "expo-asset",
-      "expo-status-bar"
-    ],
-    "experiments": {
-      "typedRoutes": false
-    }
+      "expo-status-bar",
+      "expo-secure-store"
+    ]
   }
 }
