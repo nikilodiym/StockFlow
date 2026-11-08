@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from '../../components/Icon';
 import NewDocumentSheet from '../../components/NewDocumentSheet';
 import s from '../styles';
-import { API, documentTabs, uuid, getErrorMessage } from '../domain';
+import { API, documentTabs, uuid, getErrorMessage, fetchWithTimeout, findServer, parseServerUrl, serverCandidates } from '../domain';
 import type { Screen, DocumentType, Product, DocumentItem, OutboxRow, UserData, LoginResponse, DialogAction, AppDialog } from '../domain';
 
 export default function WorkerScreen() {
@@ -33,8 +33,15 @@ export default function WorkerScreen() {
 
     const [serverUrl, setServerUrl] = useState(API);
     const [serverDraft, setServerDraft] = useState(API);
-    const [serverHost, setServerHost] = useState(Platform.OS === 'android' ? '10.0.2.2' : 'localhost');
-    const [serverPort, setServerPort] = useState('8000');
+    const [serverHost, setServerHost] = useState(parseServerUrl(API).host);
+    const [serverPort, setServerPort] = useState(parseServerUrl(API).port);
+    const applyServerUrl = (url: string): void => {
+        const { host, port } = parseServerUrl(url);
+        setServerUrl(url);
+        setServerDraft(url);
+        setServerHost(host);
+        setServerPort(port);
+    };
     const [token, setToken] = useState('');
     const [authEmail, setAuthEmail] = useState('');
     const [authPassword, setAuthPassword] = useState('');
@@ -136,19 +143,16 @@ export default function WorkerScreen() {
 
                 if (!active) return;
 
-                // Older builds persisted a machine-specific LAN IP. It goes
-                // stale when the server moves or the app runs in an emulator.
-                const isStaleDefault = savedUrl === 'http://192.168.7.13:8000/api';
-                if (savedUrl && !isStaleDefault) {
-                    setServerUrl(savedUrl);
-                    setServerDraft(savedUrl);
-                    const address = savedUrl.replace(/^https?:\/\//i, '').split('/')[0];
-                    const separator = address.lastIndexOf(':');
-                    setServerHost(separator < 0 ? address : address.slice(0, separator));
-                    if (separator >= 0) setServerPort(address.slice(separator + 1));
-                } else if (isStaleDefault) {
-                    await AsyncStorage.setItem('serverUrl', API);
-                }
+                // A saved address goes stale on another emulator or phone
+                // (10.0.2.2 works only in emulators, localhost only with adb
+                // reverse, a LAN IP changes with Wi-Fi). Try the saved one
+                // first, then the Metro host, 10.0.2.2 and localhost.
+                if (savedUrl) applyServerUrl(savedUrl);
+                void findServer(serverCandidates(savedUrl)).then(found => {
+                    if (!active || !found) return;
+                    applyServerUrl(found);
+                    if (found !== savedUrl) void AsyncStorage.setItem('serverUrl', found);
+                });
 
                 if (savedToken) {
                     setToken(savedToken);
@@ -189,8 +193,8 @@ export default function WorkerScreen() {
 
         const check = async () => {
             try {
-                const response = await fetch(
-                    `${serverUrl.replace(/\/$/, '')}/health/`
+                const response = await fetchWithTimeout(
+                    `${serverUrl.replace(/\/$/, '')}/health/`, {}, 5000
                 );
 
                 if (active) {
@@ -314,7 +318,7 @@ export default function WorkerScreen() {
             let synced = 0;
 
             for (const entry of pending) {
-                const response = await fetch(
+                const response = await fetchWithTimeout(
                     `${serverUrl.replace(/\/$/, '')}/sync/`,
                     {
                         method: 'POST',
@@ -323,7 +327,8 @@ export default function WorkerScreen() {
                             Authorization: `Bearer ${token}`,
                         },
                         body: entry.payload,
-                    }
+                    },
+                    20000
                 );
 
                 if (response.status === 401) {
@@ -384,20 +389,31 @@ export default function WorkerScreen() {
             return;
         }
 
+        const request = (base: string) => fetchWithTimeout(
+            `${base.replace(/\/$/, '')}/auth/login/`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
+            },
+            10000
+        );
+
+        let base = serverUrl;
         try {
-            const response = await fetch(
-                `${serverUrl.replace(/\/$/, '')}/auth/login/`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        email,
-                        password,
-                    }),
-                }
-            );
+            let response: Response;
+            try {
+                response = await request(base);
+            } catch (networkError) {
+                // Saved address unreachable from this device: look for the server elsewhere once.
+                const current = base.replace(/\/$/, '');
+                const found = await findServer(serverCandidates(current).filter(url => url !== current));
+                if (!found) throw networkError;
+                base = found;
+                applyServerUrl(found);
+                await AsyncStorage.setItem('serverUrl', found);
+                response = await request(found);
+            }
 
             const data = (await response.json().catch(
                 () => ({})
@@ -444,7 +460,7 @@ export default function WorkerScreen() {
             setNeedsUnlock(false);
             setAuthPassword('');
         } catch (error) {
-            showDialog('Не вдалося увійти', `${getErrorMessage(error)}\n\nПеревірте, що API запущений на комп’ютері.`, undefined, 'error');
+            showDialog('Не вдалося увійти', `${getErrorMessage(error)}\n\nСервер: ${base}\nПеревірте, що на комп’ютері запущені база (docker compose up -d db) і API (npm run api), а телефон у тій самій Wi-Fi мережі. Адресу можна змінити в Налаштуваннях.`, undefined, 'error');
         }
     };
 
@@ -498,9 +514,10 @@ export default function WorkerScreen() {
         setServerDraft(value); setServerUrl(value);
         await AsyncStorage.setItem('serverUrl', value);
         try {
-            const response = await fetch(`${value}/health/`);
+            const response = await fetchWithTimeout(`${value}/health/`, {}, 5000);
+            const body = await response.json().catch(() => ({})) as { detail?: string };
             setOnline(response.ok);
-            showDialog(response.ok ? 'З’єднання встановлено' : 'Сервер недоступний', response.ok ? 'WareGo підключено до сервера.' : `Сервер повернув ${response.status}.`, undefined, response.ok ? 'success' : 'error');
+            showDialog(response.ok ? 'З’єднання встановлено' : 'Сервер недоступний', response.ok ? 'WareGo підключено до сервера.' : (body.detail || `Сервер повернув ${response.status}.`), undefined, response.ok ? 'success' : 'error');
         } catch (error) {
             setOnline(false); showDialog('Немає з’єднання', getErrorMessage(error), undefined, 'error');
         }

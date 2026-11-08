@@ -1,10 +1,73 @@
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-// Android emulators reach the host computer through 10.0.2.2. Physical
-// devices can use their computer's LAN address from Settings.
-export const API = Platform.OS === 'android'
-    ? 'http://10.0.2.2:8000/api'
-    : 'http://localhost:8000/api';
+export const API_PORT = '8000';
+export const apiUrl = (host: string, port: string = API_PORT): string => `http://${host}:${port}/api`;
+
+// Host of the Metro bundler the app was loaded from = the computer's LAN IP.
+// It is reachable from any emulator (Pixel 6, Pixel 9 …) and from a physical
+// phone in the same Wi-Fi, so it is the best default for the API too.
+const metroHost: string | null = (() => {
+    const uri = Constants.expoConfig?.hostUri
+        ?? (Constants as unknown as { expoGoConfig?: { debuggerHost?: string } }).expoGoConfig?.debuggerHost
+        ?? '';
+    const host = uri.split(':')[0];
+    return host || null;
+})();
+
+// Android emulators reach the computer through 10.0.2.2; iOS simulator/web through localhost.
+const fallbackHost = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
+
+export const API = apiUrl(metroHost ?? fallbackHost);
+
+/** Addresses to try, best first: the saved one, Metro host, emulator alias, localhost. */
+export function serverCandidates(saved?: string | null): string[] {
+    const list = [
+        saved,
+        metroHost ? apiUrl(metroHost) : null,
+        Platform.OS === 'android' ? apiUrl('10.0.2.2') : null,
+        apiUrl('localhost'),
+    ];
+    return [...new Set(list.filter((url): url is string => !!url).map(url => url.replace(/\/$/, '')))];
+}
+
+/** fetch that gives up after `ms` instead of hanging (RN fetch has no timeout). */
+export async function fetchWithTimeout(url: string, options: RequestInit = {}, ms = 8000): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } catch (error) {
+        if (controller.signal.aborted) {
+            throw new Error(`Сервер не відповів за ${Math.round(ms / 1000)} с (${url.replace(/\/[^/]*\/?$/, '')})`);
+        }
+        throw error;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/** First candidate whose /health/ answers 200, or null. */
+export async function findServer(candidates: string[], ms = 3000): Promise<string | null> {
+    for (const url of candidates) {
+        try {
+            const response = await fetchWithTimeout(`${url}/health/`, {}, ms);
+            if (response.ok) return url;
+        } catch {
+            // try the next address
+        }
+    }
+    return null;
+}
+
+/** Splits http://host:port/api into host and port for the Settings form. */
+export function parseServerUrl(url: string): { host: string; port: string } {
+    const address = url.replace(/^https?:\/\//i, '').split('/')[0];
+    const separator = address.lastIndexOf(':');
+    return separator < 0
+        ? { host: address, port: API_PORT }
+        : { host: address.slice(0, separator), port: address.slice(separator + 1) };
+}
 
 export type Screen = 'home' | 'scan' | 'search' | 'docs' | 'settings' | 'profile' | 'files' | 'detail' | 'import' | 'notifications' | 'conflict';
 export type DocumentType = 'receipt' | 'writeoff' | 'inventory' | 'transfer';
