@@ -49,3 +49,9 @@ export const SCHEMA_V2 = `
     CREATE INDEX IF NOT EXISTS products_sku ON products (sku);
     CREATE INDEX IF NOT EXISTS lines_document ON lines (document_id);
 `;
+
+/** Version 3 — document ownership and unit conversions from the catalog. */
+export const SCHEMA_V3 = `
+    ALTER TABLE documents ADD COLUMN created_by INTEGER;
+    ALTER TABLE products ADD COLUMN units_json TEXT;
+`;

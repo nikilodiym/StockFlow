@@ -19,6 +19,8 @@ import OnlineModeCard from '../components/OnlineModeCard';
 import QuickAccess, { type QuickTarget } from '../components/QuickAccess';
 import ShiftStats from '../components/ShiftStats';
 import SyncCard from '../components/SyncCard';
+import { useScanDestination } from '../../inventory/hooks/useScanDestination';
+import { useDocumentPrinting } from '../../inventory/hooks/useDocumentPrinting';
 
 /** Home tab: shortcuts, online mode, sync, current document, latest documents, shift stats. */
 export default function HomeScreen() {
@@ -28,14 +30,28 @@ export default function HomeScreen() {
     const { warehouse, online, onlineMode, setOnlineMode } = useSettings();
     const { syncing, sync, notificationsRead } = useSync();
     const { products } = useProducts();
-    const { docType, setDocType, items, savedDocs, outboxCount, refreshDocs } = useInventory();
+    const {
+        docType,
+        setDocType,
+        scanItems: items,
+        scanDocumentId,
+        savedDocs,
+        outboxCount,
+        refreshDocs,
+    } = useInventory();
+    const destination = useScanDestination(() => navigation.navigate('Scanner'));
+    const printing = useDocumentPrinting();
     const pickWarehouse = useWarehousePicker();
 
-    useFocusEffect(useCallback(() => { void refreshDocs(); }, [refreshDocs]));
+    useFocusEffect(
+        useCallback(() => {
+            void refreshDocs();
+        }, [refreshDocs]),
+    );
 
     const open = (target: QuickTarget) => {
         if (target === 'search') navigation.navigate('Search');
-        else if (target === 'scan') navigation.navigate('Scanner');
+        else if (target === 'scan') destination.open();
         else if (target === 'docs') navigation.navigate('Tabs', { screen: 'Documents' });
         else navigation.navigate('Tabs', { screen: 'Files' });
     };
@@ -53,6 +69,7 @@ export default function HomeScreen() {
                 onWarehouse={pickWarehouse}
                 onNotifications={() => navigation.navigate('Notifications')}
                 onSettings={() => navigation.navigate('Settings')}
+                onPrint={printing.open}
             />
             <ScrollView contentContainerStyle={s.homeBody} keyboardShouldPersistTaps="handled">
                 <Pressable style={s.searchBar} onPress={() => navigation.navigate('Search')}>
@@ -60,18 +77,29 @@ export default function HomeScreen() {
                     <Icon name="search" size={19} color={colors.mutedIcon} />
                 </Pressable>
                 <QuickAccess compact={width < 380} onOpen={open} />
-                <OnlineModeCard onlineMode={onlineMode} online={online} onToggle={() => setOnlineMode(v => !v)} />
+                <OnlineModeCard onlineMode={onlineMode} online={online} onToggle={() => setOnlineMode((v) => !v)} />
                 <SyncCard count={outboxCount} syncing={syncing} onSync={() => void sync()} />
-                <CurrentDocumentCard type={docType} items={items} onOpen={() => navigation.navigate('DocumentDetail', {})} onScan={() => navigation.navigate('Scanner')} />
+                <CurrentDocumentCard
+                    type={docType}
+                    items={items}
+                    onOpen={() => navigation.navigate('DocumentDetail', { docId: scanDocumentId ?? undefined })}
+                    onScan={destination.open}
+                />
                 <View style={s.sectionHeading}>
                     <Text style={s.sectionLabel}>АКТИВНІ ДОКУМЕНТИ</Text>
-                    <Pressable onPress={() => open('docs')}><Text style={s.linkText}>Усі</Text></Pressable>
+                    <Pressable onPress={() => open('docs')}>
+                        <Text style={s.linkText}>Усі</Text>
+                    </Pressable>
                 </View>
-                {savedDocs.slice(0, 2).map(doc => <DocumentCard key={doc.id} doc={doc} warehouse={warehouse} onPress={openDoc} />)}
+                {savedDocs.slice(0, 2).map((doc) => (
+                    <DocumentCard key={doc.id} doc={doc} warehouse={warehouse} onPress={openDoc} />
+                ))}
                 <Text style={s.sectionLabel}>ВАША ЗМІНА</Text>
                 <ShiftStats scans={products.length} documents={savedDocs.length} />
                 <Text style={s.shiftTime}>08:00–20:00</Text>
             </ScrollView>
+            {destination.sheets}
+            {printing.picker}
         </ScreenContainer>
     );
 }

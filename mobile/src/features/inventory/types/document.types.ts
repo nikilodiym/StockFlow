@@ -19,6 +19,10 @@ export type SavedDocument = {
     created_at: string;
     /** 1 when it is no longer waiting in the outbox. */
     is_synced?: number;
+    warehouse?: number;
+    created_by?: number | null;
+    note?: string;
+    line_count?: number;
 };
 
 export type OutboxRow = {

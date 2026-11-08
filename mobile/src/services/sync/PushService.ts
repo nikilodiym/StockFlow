@@ -4,7 +4,8 @@ import { TIMEOUTS } from '../../constants/config';
 import { DocumentRepository } from '../../features/inventory/repositories/DocumentRepository';
 import type { LegacySyncPayload } from '../../features/inventory/types/document.types';
 import { ProductRepository } from '../../features/products/repositories/ProductRepository';
-import { apiRequest } from '../api/client';
+import { apiRequest, readJson } from '../api/client';
+import { PermissionError } from '../../features/auth/services/PermissionService';
 import { ENDPOINTS } from '../api/endpoints';
 
 export type PushResult =
@@ -37,6 +38,15 @@ export const PushService = {
         const serverIds = await ProductRepository.serverIdMap(db);
         let synced = 0;
         for (const entry of pending) {
+            const data = JSON.parse(entry.payload) as LegacySyncPayload;
+            for (const change of data.changes ?? []) {
+                for (const line of change.document?.lines ?? []) {
+                    if (!serverIds.has(line.product))
+                        throw new Error(
+                            'Один із товарів ще не зіставлений із серверним каталогом. Оновіть каталог або створіть товар на сервері. Документ збережено на пристрої.',
+                        );
+                }
+            }
             const response = await apiRequest(serverUrl, ENDPOINTS.legacySync, {
                 method: 'POST',
                 rawBody: mapPayloadProducts(entry.payload, serverIds),
@@ -44,6 +54,7 @@ export const PushService = {
                 timeout: TIMEOUTS.sync,
             });
             if (response.status === 401) return { status: 'unauthorized', synced };
+            if (response.status === 403) throw new PermissionError();
             if (response.status === 409) {
                 await DocumentRepository.setStatus(db, entry.id, 'conflict');
                 return { status: 'conflict', synced, documentId: entry.id };
@@ -51,6 +62,16 @@ export const PushService = {
             if (!response.ok) {
                 const message = await response.text().catch(() => '');
                 throw new Error(`Сервер повернув ${response.status}. ${message}`);
+            }
+            const body = await readJson<{
+                results?: { client_id: string; status: string; reason?: string; code?: string }[];
+            }>(response);
+            const result = body.results?.find((r) => r.client_id === entry.id);
+            if (!result || result.status !== 'accepted') {
+                if (result?.code === 'permission_denied') throw new PermissionError(result.reason);
+                throw new Error(
+                    result?.reason || 'Сервер не підтвердив збереження документа. Локальні дані залишено в черзі.',
+                );
             }
             await DocumentRepository.deleteOutbox(db, entry.id);
             synced++;

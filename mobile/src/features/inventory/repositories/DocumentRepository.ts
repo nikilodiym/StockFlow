@@ -8,13 +8,25 @@ import type { DocumentItem, DocumentType, OutboxRow, SavedDocument } from '../ty
 export const DocumentRepository = {
     // --- lines -------------------------------------------------------------
     async getLines(db: SQLiteDatabase, documentId: string = ACTIVE_DOCUMENT_ID): Promise<DocumentItem[]> {
-        const rows = await db.getAllAsync<Parameters<typeof DocumentLineModel.fromRow>[0]>(DocumentLineModel.selectSql, [documentId]);
+        const rows = await db.getAllAsync<Parameters<typeof DocumentLineModel.fromRow>[0]>(
+            DocumentLineModel.selectSql,
+            [documentId],
+        );
         return rows.map(DocumentLineModel.fromRow);
     },
 
     /** Returns the new line id. */
-    async insertLine(db: SQLiteDatabase, productId: number, quantity: number, unit: string, documentId: string = ACTIVE_DOCUMENT_ID): Promise<number> {
-        const result = await db.runAsync('INSERT INTO lines (document_id, product_id, quantity, unit) VALUES (?, ?, ?, ?)', [documentId, productId, quantity, unit]);
+    async insertLine(
+        db: SQLiteDatabase,
+        productId: number,
+        quantity: number,
+        unit: string,
+        documentId: string = ACTIVE_DOCUMENT_ID,
+    ): Promise<number> {
+        const result = await db.runAsync(
+            'INSERT INTO lines (document_id, product_id, quantity, unit) VALUES (?, ?, ?, ?)',
+            [documentId, productId, quantity, unit],
+        );
         return Number(result.lastInsertRowId);
     },
 
@@ -28,7 +40,8 @@ export const DocumentRepository = {
     // --- documents ---------------------------------------------------------
     async list(db: SQLiteDatabase): Promise<SavedDocument[]> {
         const rows = await db.getAllAsync<Parameters<typeof DocumentModel.fromRow>[0]>(
-            `SELECT documents.id, documents.type, documents.status, documents.created_at,
+            `SELECT documents.id, documents.type, documents.status, documents.created_at, documents.warehouse, documents.created_by, documents.note,
+                    (SELECT COUNT(*) FROM lines WHERE lines.document_id = documents.id) AS line_count,
                     CASE WHEN outbox.id IS NULL THEN 1 ELSE 0 END AS is_synced
              FROM documents LEFT JOIN outbox ON outbox.id = documents.id
              ORDER BY documents.created_at DESC`,
@@ -37,13 +50,51 @@ export const DocumentRepository = {
     },
 
     /** Saves the current (active) document: new row, its lines move to it, payload goes to the outbox. */
-    async saveActive(db: SQLiteDatabase, doc: { id: string; type: DocumentType; status: string; warehouse: number; note: string; createdAt: string; payload: string }): Promise<void> {
+    async saveActive(
+        db: SQLiteDatabase,
+        doc: {
+            id: string;
+            type: DocumentType;
+            status: string;
+            warehouse: number;
+            note: string;
+            createdAt: string;
+            payload: string;
+            createdBy?: number;
+        },
+    ): Promise<void> {
         await db.withTransactionAsync(async () => {
-            await db.runAsync('INSERT INTO documents (id, type, status, warehouse, note, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-                [doc.id, doc.type, doc.status, doc.warehouse, doc.note, doc.createdAt]);
+            await db.runAsync(
+                'INSERT INTO documents (id, type, status, warehouse, note, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [doc.id, doc.type, doc.status, doc.warehouse, doc.note, doc.createdAt, doc.createdBy ?? null],
+            );
             await db.runAsync('UPDATE lines SET document_id = ? WHERE document_id = ?', [doc.id, ACTIVE_DOCUMENT_ID]);
-            await db.runAsync('INSERT INTO outbox (id, payload, created_at) VALUES (?, ?, ?)', [doc.id, doc.payload, doc.createdAt]);
+            await db.runAsync('INSERT INTO outbox (id, payload, created_at) VALUES (?, ?, ?)', [
+                doc.id,
+                doc.payload,
+                doc.createdAt,
+            ]);
         });
+    },
+
+    get: (db: SQLiteDatabase, id: string) =>
+        db.getFirstAsync<SavedDocument>('SELECT * FROM documents WHERE id = ?', [id]),
+
+    async createDraft(
+        db: SQLiteDatabase,
+        doc: { id: string; type: DocumentType; warehouse: number; createdAt: string; createdBy?: number },
+    ): Promise<void> {
+        await db.runAsync(
+            "INSERT INTO documents (id,type,status,warehouse,note,created_at,created_by) VALUES (?,?,'draft',?,'',?,?)",
+            [doc.id, doc.type, doc.warehouse, doc.createdAt, doc.createdBy ?? null],
+        );
+    },
+
+    async queue(db: SQLiteDatabase, id: string, payload: string): Promise<void> {
+        await db.runAsync(
+            'INSERT INTO outbox (id,payload,created_at) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload',
+            [id, payload, new Date().toISOString()],
+        );
     },
 
     setStatus: (db: SQLiteDatabase, id: string, status: string) =>
@@ -60,7 +111,8 @@ export const DocumentRepository = {
     // --- outbox ------------------------------------------------------------
     listOutbox: (db: SQLiteDatabase) => db.getAllAsync<OutboxRow>('SELECT * FROM outbox ORDER BY created_at'),
 
-    getOutbox: (db: SQLiteDatabase, id: string) => db.getFirstAsync<OutboxRow>('SELECT * FROM outbox WHERE id = ?', [id]),
+    getOutbox: (db: SQLiteDatabase, id: string) =>
+        db.getFirstAsync<OutboxRow>('SELECT * FROM outbox WHERE id = ?', [id]),
 
     updateOutbox: (db: SQLiteDatabase, id: string, payload: string) =>
         db.runAsync('UPDATE outbox SET payload = ? WHERE id = ?', [payload, id]),

@@ -1,6 +1,6 @@
 /** Shared TypeScript types used across features. Feature-specific types live in features/<name>/types. */
 
-export type DialogKind = 'info' | 'success' | 'error' | 'confirm' | 'sheet' | 'input';
+export type DialogKind = 'info' | 'success' | 'error' | 'confirm' | 'sheet' | 'input' | 'permission';
 
 export type DialogAction = {
     label: string;

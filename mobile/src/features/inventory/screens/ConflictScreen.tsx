@@ -7,6 +7,7 @@ import ScreenContainer from '../../../components/layout/ScreenContainer';
 import { useDialog } from '../../../app/providers/DialogProvider';
 import type { RootScreenProps } from '../../../app/navigation/types';
 import { useInventory } from '../hooks/useInventory';
+import {usePermissions} from '../../../hooks/usePermissions';
 
 type Choice = 'local' | 'server';
 
@@ -16,12 +17,15 @@ export default function ConflictScreen({ navigation, route }: RootScreenProps<'C
     const { resolveConflict } = useInventory();
     const { showDialog } = useDialog();
     const [choice, setChoice] = useState<Choice | null>(null);
+    const {reportError}=usePermissions();
 
     const apply = async () => {
         if (!choice) return;
-        await resolveConflict(docId);
-        navigation.goBack();
-        showDialog('Конфлікт розв’язано', `Застосовано ${choice === 'local' ? 'локальні' : 'серверні'} дані.`, undefined, 'success');
+        try {
+            await resolveConflict(docId);
+            navigation.goBack();
+            showDialog('Конфлікт розв’язано', `Застосовано ${choice === 'local' ? 'локальні' : 'серверні'} дані.`, undefined, 'success');
+        } catch(error) {reportError(error);}
     };
 
     return (

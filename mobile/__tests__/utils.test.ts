@@ -27,7 +27,8 @@ describe('formatters', () => {
         expect(recordsLabel(3)).toBe('записи');
     });
     it('csvCell escapes quotes', () => expect(csvCell('a"b')).toBe('"a""b"'));
-    it('uuid looks like v4', () => expect(uuid()).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/));
+    it('uuid looks like v4', () =>
+        expect(uuid()).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/));
 });
 
 describe('server address', () => {
@@ -45,8 +46,8 @@ describe('server address', () => {
 
 describe('migrations', () => {
     it('runs only missing versions, in order', () => {
-        expect(pendingMigrations(0).map(m => m.version)).toEqual([1, 2]);
-        expect(pendingMigrations(1).map(m => m.version)).toEqual([2]);
+        expect(pendingMigrations(0).map((m) => m.version)).toEqual([1, 2, 3]);
+        expect(pendingMigrations(1).map((m) => m.version)).toEqual([2, 3]);
         expect(pendingMigrations(LATEST_VERSION)).toEqual([]);
     });
 });

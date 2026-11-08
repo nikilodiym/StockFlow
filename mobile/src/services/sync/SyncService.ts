@@ -16,6 +16,13 @@ export type SyncResult = {
 
 export const SyncService = {
     async run(db: SQLiteDatabase, serverUrl: string, token: string): Promise<SyncResult> {
+        // Resolve local product ids before sending lines. Only the catalog is
+        // pulled here; queued document quantities are never overwritten.
+        try {
+            await PullService.pull(db, serverUrl, token);
+        } catch {
+            /* Push preserves unresolved lines in the outbox. */
+        }
         const push = await PushService.push(db, serverUrl, token);
         if (push.status !== 'ok') return { push, pulled: null };
         try {

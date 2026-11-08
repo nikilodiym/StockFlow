@@ -269,7 +269,8 @@ def _process_item(user, device, batch, item):
                 doc = post_document(doc, user)
             return {**result, "result": APPLIED, "version": doc.version, "number": doc.number, "status": doc.status}
     except (DocumentError, DRFValidationError, PermissionDenied, ValueError) as exc:
-        return {**result, "result": ERROR, "error": _error_text(exc)}
+        return {**result, "result": ERROR, "error": _error_text(exc),
+                "code": "permission_denied" if isinstance(exc, PermissionDenied) else "validation_error"}
 
 
 def process_push(user, payload):
@@ -462,6 +463,7 @@ def legacy_sync(user, payload):
             entry["version"] = item["version"]
         if item["result"] == ERROR:
             entry["reason"] = item.get("error")
+            entry["code"] = item.get("code", "validation_error")
         if item["result"] == CONFLICT:
             entry.update(server_version=item.get("server_version"), server=item.get("server"), reason=item.get("reason"))
         results[index] = entry

@@ -18,7 +18,7 @@ import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
 /** Scanning barcodes into the current document (camera or manual code). */
 export default function ScannerScreen({ navigation }: RootScreenProps<'Scanner'>) {
     const scanner = useBarcodeScanner();
-    const { items, quantity, setQuantity } = useInventory();
+    const { scanItems: items, scanDocumentId, quantity, setQuantity } = useInventory();
     const { showDialog } = useDialog();
     const [manual, setManual] = useState('');
     const lastItem = items[items.length - 1];
@@ -32,15 +32,40 @@ export default function ScannerScreen({ navigation }: RootScreenProps<'Scanner'>
             <Header
                 back
                 title="Сканувати штрих-код"
-                right={<HeaderIconButton label="Ліхтарик" onPress={() => showDialog('Сканер', 'Ліхтарик: перемикається на пристрої з камерою.')}><Icon name="zap" size={19} color={colors.text} /></HeaderIconButton>}
+                right={
+                    <HeaderIconButton
+                        label="Ліхтарик"
+                        onPress={() => showDialog('Сканер', 'Ліхтарик: перемикається на пристрої з камерою.')}
+                    >
+                        <Icon name="zap" size={19} color={colors.text} />
+                    </HeaderIconButton>
+                }
             />
             <ScrollView contentContainerStyle={s.pageBody}>
-                <CameraView hasPermission={scanner.hasPermission} onRequestPermission={() => void scanner.requestPermission()} paused={scanner.scanned} onBarcode={scanner.onBarcode} />
-                <ScanResult scanned={scanner.scanned} lastItem={lastItem} onScanAgain={scanner.resetScan} />
+                <CameraView
+                    hasPermission={scanner.hasPermission}
+                    onRequestPermission={() => void scanner.requestPermission()}
+                    paused={scanner.scanned}
+                    onBarcode={scanner.onBarcode}
+                />
+                <ScanResult scanned={scanner.found} lastItem={lastItem} onScanAgain={scanner.resetScan} />
                 <QuantityPicker value={quantity} unit={lastItem?.unit || 'шт'} onChange={setQuantity} />
-                <Button label={`✓  Готово (${items.length})`} onPress={() => navigation.navigate('DocumentDetail', {})} />
-                <Button variant="text" label="▤  Ввести штрихкод вручну" onPress={() => navigation.navigate('Search')} />
-                <Input label="РУЧНЕ ВВЕДЕННЯ" placeholder="Штрих-код або SKU" keyboardType="default" value={manual} onChangeText={setManual} />
+                <Button
+                    label={`✓  Готово (${items.length})`}
+                    onPress={() => navigation.navigate('DocumentDetail', { docId: scanDocumentId ?? undefined })}
+                />
+                <Button
+                    variant="text"
+                    label="▤  Ввести штрихкод вручну"
+                    onPress={() => navigation.navigate('Search')}
+                />
+                <Input
+                    label="РУЧНЕ ВВЕДЕННЯ"
+                    placeholder="Штрих-код або SKU"
+                    keyboardType="default"
+                    value={manual}
+                    onChangeText={setManual}
+                />
                 <Button variant="scan" label="Знайти й додати товар" onPress={() => void findManual()} />
             </ScrollView>
         </ScreenContainer>

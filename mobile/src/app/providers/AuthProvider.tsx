@@ -7,9 +7,11 @@ import { AuthRepository } from '../../features/auth/repositories/AuthRepository'
 import { AuthService, displayName } from '../../features/auth/services/AuthService';
 import type { UserData } from '../../features/auth/types/auth.types';
 import { normalizeEmail } from '../../utils/validators';
+import { apiRequest, readJson } from '../../services/api/client';
 import { useSettings } from './SettingsProvider';
 
 type AuthContextValue = {
+    user: UserData | null;
     /** Restoring the saved session on startup. */
     initializing: boolean;
     token: string;
@@ -55,27 +57,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setNeedsUnlock(!!session);
             }
         })()
-            .catch(error => console.error('Помилка відновлення сесії:', error))
-            .finally(() => { if (active) setInitializing(false); });
-        return () => { active = false; };
+            .catch((error) => console.error('Помилка відновлення сесії:', error))
+            .finally(() => {
+                if (active) setInitializing(false);
+            });
+        return () => {
+            active = false;
+        };
     }, []);
 
-    const signIn = useCallback(async (email: string, password: string) => {
-        const result = await AuthService.login(serverUrl, normalizeEmail(email), password);
-        if (result.serverUrl !== serverUrl) await applyServerUrl(result.serverUrl);
-        const profile = result.user ?? { email: normalizeEmail(email) };
-        await AuthRepository.saveSession({ token: result.token, refresh: result.refresh, user: profile });
-        setUser(profile);
-        setToken(result.token);
-        setRefresh(result.refresh);
-        setNeedsUnlock(false);
-    }, [serverUrl, applyServerUrl]);
+    const signIn = useCallback(
+        async (email: string, password: string) => {
+            const result = await AuthService.login(serverUrl, normalizeEmail(email), password);
+            if (result.serverUrl !== serverUrl) await applyServerUrl(result.serverUrl);
+            const profile = result.user ?? { email: normalizeEmail(email) };
+            await AuthRepository.saveSession({ token: result.token, refresh: result.refresh, user: profile });
+            setUser(profile);
+            setToken(result.token);
+            setRefresh(result.refresh);
+            setNeedsUnlock(false);
+        },
+        [serverUrl, applyServerUrl],
+    );
 
-    const unlockWithPin = useCallback((pin: string) => {
-        if (pin !== storedPin) return false;
-        setNeedsUnlock(false);
-        return true;
-    }, [storedPin]);
+    const unlockWithPin = useCallback(
+        (pin: string) => {
+            if (pin !== storedPin) return false;
+            setNeedsUnlock(false);
+            return true;
+        },
+        [storedPin],
+    );
 
     const savePin = useCallback(async (pin: string) => {
         await AuthRepository.savePin(pin);
@@ -100,20 +112,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return renewed.token;
     }, [refresh, serverUrl, user]);
 
-    const value = useMemo<AuthContextValue>(() => ({
-        initializing,
-        token,
-        userName: displayName(user),
-        userEmail: user?.email ?? '',
-        storedPin,
-        needsUnlock,
-        isAuthenticated: !!token && !needsUnlock,
-        signIn,
-        unlockWithPin,
-        savePin,
-        signOut,
-        refreshToken,
-    }), [initializing, token, user, storedPin, needsUnlock, signIn, unlockWithPin, savePin, signOut, refreshToken]);
+    // Refresh roles as well as the profile; older saved sessions had no role fields.
+    useEffect(() => {
+        if (!token) return;
+        let active = true;
+        void apiRequest(serverUrl, '/auth/me/', { token })
+            .then(async (response) => {
+                if (!response.ok) return;
+                const profile = await readJson<UserData>(response);
+                if (!active || !profile.id) return;
+                setUser(profile);
+                await AuthRepository.saveSession({ token, refresh, user: profile });
+            })
+            .catch(() => {
+                /* Offline: keep the last server-verified profile. */
+            });
+        return () => {
+            active = false;
+        };
+    }, [token, serverUrl, refresh]);
+
+    const value = useMemo<AuthContextValue>(
+        () => ({
+            user,
+            initializing,
+            token,
+            userName: displayName(user),
+            userEmail: user?.email ?? '',
+            storedPin,
+            needsUnlock,
+            isAuthenticated: !!token && !needsUnlock,
+            signIn,
+            unlockWithPin,
+            savePin,
+            signOut,
+            refreshToken,
+        }),
+        [initializing, token, user, storedPin, needsUnlock, signIn, unlockWithPin, savePin, signOut, refreshToken],
+    );
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

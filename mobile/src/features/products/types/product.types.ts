@@ -8,6 +8,7 @@ export type Product = {
     stock: number;
     /** Id of the same product on the server (set by sync pull). */
     server_id?: number | null;
+    units?: { name: string; factor: number }[];
 };
 
 /** One parsed row of an imported CSV (SKU,Barcode,Name,Unit,Stock). */
@@ -28,4 +29,7 @@ export type ServerProduct = {
     barcode: string;
     stock: string | number;
     is_active: boolean;
+    packings?: { unit_name: string; factor: string | number }[];
 };
+
+export type ProductDraft = { sku: string; name: string; barcode: string; unit: string };

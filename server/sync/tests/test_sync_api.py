@@ -214,6 +214,15 @@ class TestLegacySync:
         assert again.status_code == 200
         assert stock_of(product, warehouse) == 3
 
+    def test_permission_rejection_has_a_machine_readable_code(self, client_for, worker, warehouse2, make_product):
+        doc_id = uuid.uuid4()
+        response = client_for(worker).post('/api/sync/', self.payload(warehouse2, make_product(), doc_id), format='json')
+        assert response.status_code == 200
+        result = response.data['results'][0]
+        assert result['status'] == 'rejected'
+        assert result['code'] == 'permission_denied'
+        assert not Document.objects.filter(pk=doc_id).exists()
+
     def test_conflict_returns_409(self, client_for, worker, manager, warehouse, make_product):
         product, doc_id = make_product(), uuid.uuid4()
         client_for(worker).post("/api/sync/", self.payload(warehouse, product, doc_id), format="json")

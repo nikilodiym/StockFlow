@@ -4,11 +4,11 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useInventory } from '../../features/inventory/hooks/useInventory';
 import { useProducts } from '../../features/products/hooks/useProducts';
 import { SyncService } from '../../services/sync/SyncService';
-import { getErrorMessage } from '../../utils/formatters';
 import { navigateToDocuments } from '../navigation/navigationRef';
 import { useAuth } from './AuthProvider';
 import { useDialog } from './DialogProvider';
 import { useSettings } from './SettingsProvider';
+import { usePermissions } from '../../hooks/usePermissions';
 
 type SyncContextValue = {
     syncing: boolean;
@@ -32,43 +32,66 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     const [syncing, setSyncing] = useState(false);
     const [notificationsRead, setNotificationsRead] = useState(false);
     const busy = useRef(false);
+    const { reportError } = usePermissions();
 
-    const sync = useCallback(async (showEmptyQueueMessage = true) => {
-        if (busy.current) return;
-        if (!token) {
-            showDialog('Потрібен вхід', 'Увійдіть до облікового запису перед синхронізацією.', undefined, 'error');
-            return;
-        }
-        busy.current = true;
-        setSyncing(true);
-        try {
-            let result = await SyncService.run(db, serverUrl, token);
-            if (result.push.status === 'unauthorized') {
-                // Access token expired (20 min): renew it once and retry.
-                const renewed = await refreshToken();
-                if (renewed) result = await SyncService.run(db, serverUrl, renewed);
+    const sync = useCallback(
+        async (showEmptyQueueMessage = true) => {
+            if (busy.current) return;
+            if (!token) {
+                showDialog('Потрібен вхід', 'Увійдіть до облікового запису перед синхронізацією.', undefined, 'error');
+                return;
             }
-            const { push, pulled } = result;
-            await refreshDocs();
-            if (pulled) await reloadProducts();
+            busy.current = true;
+            setSyncing(true);
+            try {
+                let result = await SyncService.run(db, serverUrl, token);
+                if (result.push.status === 'unauthorized') {
+                    // Access token expired (20 min): renew it once and retry.
+                    const renewed = await refreshToken();
+                    if (renewed) result = await SyncService.run(db, serverUrl, renewed);
+                }
+                const { push, pulled } = result;
+                await refreshDocs();
+                if (pulled) await reloadProducts();
 
-            if (push.status === 'unauthorized') {
-                showDialog('Потрібен повторний вхід', 'Сервер відхилив токен доступу. Увійдіть знову.', undefined, 'error');
-            } else if (push.status === 'conflict') {
-                showDialog('Конфлікт синхронізації', 'Сервер і пристрій мають різні зміни. Відкрийте документ і оберіть потрібну версію.',
-                    [{ label: 'До документів', tone: 'primary', onPress: navigateToDocuments }], 'error');
-            } else if (push.synced > 0) {
-                showDialog('Синхронізацію завершено', `Передано документів: ${push.synced}.${pulledNote(pulled)}`, undefined, 'success');
-            } else if (showEmptyQueueMessage) {
-                showDialog('Усе синхронізовано', `Немає документів, що очікують передавання.${pulledNote(pulled)}`, undefined, 'success');
+                if (push.status === 'unauthorized') {
+                    showDialog(
+                        'Потрібен повторний вхід',
+                        'Сервер відхилив токен доступу. Увійдіть знову.',
+                        undefined,
+                        'error',
+                    );
+                } else if (push.status === 'conflict') {
+                    showDialog(
+                        'Конфлікт синхронізації',
+                        'Сервер і пристрій мають різні зміни. Відкрийте документ і оберіть потрібну версію.',
+                        [{ label: 'До документів', tone: 'primary', onPress: navigateToDocuments }],
+                        'error',
+                    );
+                } else if (push.synced > 0) {
+                    showDialog(
+                        'Синхронізацію завершено',
+                        `Передано документів: ${push.synced}.${pulledNote(pulled)}`,
+                        undefined,
+                        'success',
+                    );
+                } else if (showEmptyQueueMessage) {
+                    showDialog(
+                        'Усе синхронізовано',
+                        `Немає документів, що очікують передавання.${pulledNote(pulled)}`,
+                        undefined,
+                        'success',
+                    );
+                }
+            } catch (error) {
+                reportError(error, 'Не вдалося синхронізувати');
+            } finally {
+                busy.current = false;
+                setSyncing(false);
             }
-        } catch (error) {
-            showDialog('Не вдалося синхронізувати', getErrorMessage(error), undefined, 'error');
-        } finally {
-            busy.current = false;
-            setSyncing(false);
-        }
-    }, [db, token, refreshToken, serverUrl, refreshDocs, reloadProducts, showDialog]);
+        },
+        [db, token, refreshToken, serverUrl, refreshDocs, reloadProducts, showDialog],
+    );
 
     // Sync as soon as the network becomes available, then every N minutes.
     const syncRef = useRef(sync);
@@ -83,9 +106,15 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         return () => clearInterval(timer);
     }, [autoSync, onlineMode, online, token, syncInterval]);
 
-    const value = useMemo(() => ({
-        syncing, sync, notificationsRead, markNotificationsRead: () => setNotificationsRead(true),
-    }), [syncing, sync, notificationsRead]);
+    const value = useMemo(
+        () => ({
+            syncing,
+            sync,
+            notificationsRead,
+            markNotificationsRead: () => setNotificationsRead(true),
+        }),
+        [syncing, sync, notificationsRead],
+    );
 
     return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
 }

@@ -1,4 +1,5 @@
 import { displayName, parseLoginResponse } from '../services/AuthService';
+import { LoginError } from '../utils/loginErrors';
 
 describe('parseLoginResponse', () => {
     it('returns the session from the current API format', () => {
@@ -16,6 +17,16 @@ describe('parseLoginResponse', () => {
 
     it('throws when the token is missing', () => {
         expect(() => parseLoginResponse(true, 200, {})).toThrow(/токен/);
+    });
+
+    it('retains the HTTP status and attempted server for rejected credentials', () => {
+        try {
+            parseLoginResponse(false, 401, { detail: 'Невірний email або пароль' }, 'http://10.0.2.2:8000/api');
+            throw new Error('Expected login to fail');
+        } catch (error) {
+            expect(error).toBeInstanceOf(LoginError);
+            expect(error).toMatchObject({ status: 401, serverUrl: 'http://10.0.2.2:8000/api' });
+        }
     });
 });
 

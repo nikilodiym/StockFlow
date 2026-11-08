@@ -10,6 +10,7 @@ import DocumentDetailScreen from '../../features/inventory/screens/DocumentDetai
 import DocumentsScreen from '../../features/inventory/screens/DocumentsScreen';
 import NotificationsScreen from '../../features/notifications/screens/NotificationsScreen';
 import SearchScreen from '../../features/products/screens/SearchScreen';
+import CreateProductScreen from '../../features/products/screens/CreateProductScreen';
 import ProfileScreen from '../../features/profile/screens/ProfileScreen';
 import ScannerScreen from '../../features/scanner/screens/ScannerScreen';
 import SettingsScreen from '../../features/settings/screens/SettingsScreen';
@@ -21,7 +22,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 /** Bottom tabs: Home, Documents, Files, Profile. */
 function Tabs() {
     return (
-        <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={props => <TabBar {...props} />}>
+        <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(props) => <TabBar {...props} />}>
             <Tab.Screen name="Home" component={HomeScreen} />
             <Tab.Screen name="Documents" component={DocumentsScreen} />
             <Tab.Screen name="Files" component={FilesScreen} />
@@ -37,6 +38,7 @@ export default function MainNavigator() {
             <Stack.Screen name="Tabs" component={Tabs} />
             <Stack.Screen name="Scanner" component={ScannerScreen} />
             <Stack.Screen name="Search" component={SearchScreen} />
+            <Stack.Screen name="CreateProduct" component={CreateProductScreen} />
             <Stack.Screen name="DocumentDetail" component={DocumentDetailScreen} />
             <Stack.Screen name="Conflict" component={ConflictScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />

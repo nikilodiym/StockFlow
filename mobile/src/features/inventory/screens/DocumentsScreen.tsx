@@ -14,38 +14,66 @@ import { DocumentItemList } from '../components/DocumentItemRow';
 import NewDocumentSheet from '../components/NewDocumentSheet';
 import { useInventory } from '../hooks/useInventory';
 import { filterDocuments } from '../services/DocumentService';
+import { usePermissions } from '../../../hooks/usePermissions';
 import type { DateFilter, DocumentType, SavedDocument, StatusFilter } from '../types/document.types';
 
 /** Documents tab: filters, saved documents of the selected type, current document. */
 export default function DocumentsScreen() {
     const navigation = useNavigation();
     const { warehouse } = useSettings();
-    const { docType, setDocType, savedDocs, items, refreshDocs, changeItemQuantity } = useInventory();
+    const { docType, setDocType, savedDocs, items, refreshDocs, changeItemQuantity, createDraft } = useInventory();
     const [status, setStatus] = useState<StatusFilter>('Усі стани');
     const [date, setDate] = useState<DateFilter>('Усі дати');
     const [sheetVisible, setSheetVisible] = useState(false);
+    const { reportError } = usePermissions();
 
-    useFocusEffect(useCallback(() => { void refreshDocs(); }, [refreshDocs]));
+    useFocusEffect(
+        useCallback(() => {
+            void refreshDocs();
+        }, [refreshDocs]),
+    );
 
     const visibleDocs = filterDocuments(savedDocs, docType, status, date);
     const openDoc = (doc: SavedDocument) => {
         setDocType(doc.type);
         navigation.navigate('DocumentDetail', { docId: doc.id });
     };
-    const startDoc = (kind: DocumentType) => {
+    const startDoc = async (kind: DocumentType) => {
         setSheetVisible(false);
-        setDocType(kind);
-        navigation.navigate('DocumentDetail', {});
+        try {
+            const id = await createDraft(kind);
+            setDocType(kind);
+            navigation.navigate('DocumentDetail', { docId: id });
+        } catch (e) {
+            reportError(e);
+        }
     };
     const newDoc = () => setSheetVisible(true);
 
     return (
         <ScreenContainer withTabBar>
-            <Header title="Документи" right={<HeaderIconButton label="Новий документ" onPress={newDoc}><Icon name="plus" size={20} color={colors.text} /></HeaderIconButton>} />
+            <Header
+                title="Документи"
+                right={
+                    <HeaderIconButton label="Новий документ" onPress={newDoc}>
+                        <Icon name="plus" size={20} color={colors.text} />
+                    </HeaderIconButton>
+                }
+            />
             <ScrollView contentContainerStyle={s.pageBody}>
-                <DocumentFilters docType={docType} onDocType={setDocType} status={status} onStatus={setStatus} date={date} onDate={setDate} docs={savedDocs} />
-                {visibleDocs.map(doc => <DocumentCard key={doc.id} doc={doc} warehouse={warehouse} onPress={openDoc} coloredStatus />)}
-                {savedDocs.filter(doc => doc.type === docType).length === 0 && (
+                <DocumentFilters
+                    docType={docType}
+                    onDocType={setDocType}
+                    status={status}
+                    onStatus={setStatus}
+                    date={date}
+                    onDate={setDate}
+                    docs={savedDocs}
+                />
+                {visibleDocs.map((doc) => (
+                    <DocumentCard key={doc.id} doc={doc} warehouse={warehouse} onPress={openDoc} coloredStatus />
+                ))}
+                {savedDocs.filter((doc) => doc.type === docType).length === 0 && (
                     <View style={s.emptyState}>
                         <Icon name="file" size={28} color={colors.primary} />
                         <Text style={s.emptyTitle}>Документів поки немає</Text>
@@ -55,10 +83,20 @@ export default function DocumentsScreen() {
                 )}
                 <Text style={s.sectionLabel}>ПОТОЧНИЙ ДОКУМЕНТ · {items.length}</Text>
                 <DocumentItemList items={items} onChange={(item, delta) => void changeItemQuantity(item, delta)} />
-                <Button variant="scan" label="Відкрити поточний документ" onPress={() => navigation.navigate('DocumentDetail', {})} />
+                <Button
+                    variant="scan"
+                    label="Відкрити поточний документ"
+                    onPress={() => navigation.navigate('DocumentDetail', {})}
+                />
             </ScrollView>
-            <Pressable accessibilityLabel="Новий документ" style={s.fab} onPress={newDoc}><Icon name="plus" size={25} color={colors.textStrong} strokeWidth={2.2} /></Pressable>
-            <NewDocumentSheet visible={sheetVisible} onClose={() => setSheetVisible(false)} onSelect={startDoc} />
+            <Pressable accessibilityLabel="Новий документ" style={s.fab} onPress={newDoc}>
+                <Icon name="plus" size={25} color={colors.textStrong} strokeWidth={2.2} />
+            </Pressable>
+            <NewDocumentSheet
+                visible={sheetVisible}
+                onClose={() => setSheetVisible(false)}
+                onSelect={(kind) => void startDoc(kind)}
+            />
         </ScreenContainer>
     );
 }

@@ -16,7 +16,8 @@ export type TabParamList = {
 export type RootStackParamList = {
     Tabs: NavigatorScreenParams<TabParamList> | undefined;
     Scanner: undefined;
-    Search: undefined;
+    Search: { selectedProductId?: number } | undefined;
+    CreateProduct: { barcode?: string } | undefined;
     /** Without docId — the current (unsaved) document. */
     DocumentDetail: { docId?: string } | undefined;
     Conflict: { docId: string };

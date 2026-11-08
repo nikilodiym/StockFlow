@@ -8,6 +8,10 @@ type DocumentRow = {
     status: string | null;
     created_at: string;
     is_synced?: number | null;
+    warehouse?: number;
+    created_by?: number | null;
+    note?: string;
+    line_count?: number;
 };
 
 export const DocumentModel = {
@@ -20,6 +24,10 @@ export const DocumentModel = {
             status: row.status ?? 'draft',
             created_at: row.created_at,
             is_synced: row.is_synced ?? 0,
+            warehouse: row.warehouse,
+            created_by: row.created_by,
+            note: row.note,
+            line_count: row.line_count,
         };
     },
 };

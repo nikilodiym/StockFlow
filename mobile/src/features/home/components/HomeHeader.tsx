@@ -11,20 +11,32 @@ type Props = {
     onWarehouse: () => void;
     onNotifications: () => void;
     onSettings: () => void;
+    onPrint: () => void;
 };
 
 /** Title, warehouse switcher, user, bell and settings buttons. */
-export default function HomeHeader({ warehouse, userName, hasUnread, onWarehouse, onNotifications, onSettings }: Props) {
+export default function HomeHeader({
+    warehouse,
+    userName,
+    hasUnread,
+    onWarehouse,
+    onNotifications,
+    onSettings,
+    onPrint,
+}: Props) {
     return (
         <View style={s.homeHeader}>
             <View>
                 <Text style={s.pageTitle}>Головна</Text>
                 <Pressable style={s.warehouseInline} onPress={onWarehouse}>
-                    <Text style={s.warehouseInlineText}>⌂  {warehouse}  ⌄</Text>
+                    <Text style={s.warehouseInlineText}>⌂ {warehouse} ⌄</Text>
                 </Pressable>
                 <Text style={s.mutedSmall}>{userName} · Складський облік</Text>
             </View>
             <View style={s.headerActions}>
+                <Pressable accessibilityLabel="Друк документів" style={s.iconButton} onPress={onPrint}>
+                    <Icon name="printer" size={20} color={colors.text} />
+                </Pressable>
                 <Pressable accessibilityLabel="Сповіщення" style={s.iconButton} onPress={onNotifications}>
                     <Icon name="bell" size={20} color={colors.text} />
                     {hasUnread && <View style={s.unreadDot} />}
