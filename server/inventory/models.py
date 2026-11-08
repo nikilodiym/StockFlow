@@ -102,6 +102,9 @@ class Document(VersionedModel):
     posted_at = models.DateTimeField(null=True, blank=True)
     cancelled_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
     cancelled_at = models.DateTimeField(null=True, blank=True)
+    # Transfers: the destination confirms receipt; until then the goods are in transit.
+    received_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    received_at = models.DateTimeField(null=True, blank=True)
     is_deleted = models.BooleanField(default=False)
     client_created_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -161,6 +164,10 @@ class Document(VersionedModel):
                 if not Document.objects.filter(number=self.number).exists():
                     raise  # not a number clash (e.g. duplicate id) — do not retry
         raise IntegrityError("Не вдалося присвоїти номер документа")
+
+    @property
+    def in_transit(self):
+        return self.type == self.TRANSFER and self.status == self.POSTED and self.received_at is None
 
     @property
     def is_draft(self):

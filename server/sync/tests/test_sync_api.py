@@ -243,3 +243,13 @@ def test_stale_devices_command(worker, manager, settings):
     call_command("check_devices")
     call_command("check_devices")
     assert Notification.objects.filter(type="stale_device", user=manager).count() == 1
+
+
+def test_push_receive_confirms_transfer(client_for, admin, make_user, warehouse, warehouse2, make_document, make_product, stock_of):
+    product = make_product()
+    receiver = make_user("lviv@test.ua", role="worker", warehouse=warehouse2)
+    transfer = post_document(make_document("transfer", warehouse, admin, [(product, 2)], destination_warehouse=warehouse2), admin)
+    client = client_for(receiver)
+    assert push(client, [item("receive", transfer.pk)]).data["results"][0]["result"] == "applied"
+    assert stock_of(product, warehouse2) == 2
+    assert push(client, [item("receive", transfer.pk)]).data["results"][0]["result"] == "duplicate"

@@ -1,26 +1,69 @@
-"""Read-only reports. No tables: everything is computed from stock, movements and documents."""
+"""
+Read queries for inventory (no side effects): visible documents, stock, movements, reports.
+Services change data, selectors read it. No tables: everything comes from stock, movements and documents.
+"""
 from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
-from django.db.models import DecimalField, ExpressionWrapper, F, Q, Sum, Value
-from django.db.models.functions import Coalesce, TruncDate
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum, Value
+from django.db.models.functions import Coalesce, ExtractHour, TruncDate
 from django.utils import timezone
 
 from accounts.models import Device
-from catalog.models import Product
+from catalog.selectors import products_with_stock
 
-from .models import Document, Stock, StockMovement
+from .models import Document, DocumentLine, Stock, StockMovement
 
 ZERO = Value(Decimal(0))
 QTY = DecimalField(max_digits=14, decimal_places=3)
 
 
-def products_with_stock(warehouse_ids=None):
-    stock_filter = Q(stock_rows__warehouse_id__in=warehouse_ids) if warehouse_ids is not None else Q()
-    return Product.objects.filter(is_active=True).annotate(
-        total_stock=Coalesce(Sum("stock_rows__quantity", filter=stock_filter), ZERO, output_field=QTY)
+def visible_documents(warehouse_ids=None, *, include_deleted=False):
+    """Documents of the user's warehouses (as source or destination); None = all warehouses."""
+    queryset = Document.objects.select_related("warehouse", "destination_warehouse", "created_by").prefetch_related(
+        "lines__product__barcodes", "lines__product__base_unit", "lines__entered_unit"
     )
+    if not include_deleted:
+        queryset = queryset.filter(is_deleted=False)
+    if warehouse_ids is not None:
+        queryset = queryset.filter(Q(warehouse_id__in=warehouse_ids) | Q(destination_warehouse_id__in=warehouse_ids))
+    return queryset
+
+
+def stock_rows(warehouse_ids=None, *, low_only=False):
+    queryset = Stock.objects.select_related("product", "warehouse")
+    if warehouse_ids is not None:
+        queryset = queryset.filter(warehouse_id__in=warehouse_ids)
+    return queryset.filter(quantity__lte=F("product__min_stock")) if low_only else queryset
+
+
+def movements(warehouse_ids=None):
+    queryset = StockMovement.objects.select_related("product", "document")
+    return queryset if warehouse_ids is None else queryset.filter(warehouse_id__in=warehouse_ids)
+
+
+def incoming_transfers(warehouse_ids=None):
+    """Posted transfers waiting for the destination to confirm receipt."""
+    queryset = visible_documents(warehouse_ids).filter(type=Document.TRANSFER, status=Document.POSTED, received_at__isnull=True)
+    return queryset if warehouse_ids is None else queryset.filter(destination_warehouse_id__in=warehouse_ids)
+
+
+def scans_by_hour(warehouse_ids=None, day=None, user=None):
+    """
+    Scanned lines per hour of a day (Profile chart). A line counts at its scan time
+    (sent by the phone) or, if missing, at the document's creation time.
+    """
+    day = day or timezone.localdate()
+    lines = DocumentLine.objects.filter(document__is_deleted=False).annotate(
+        at=Coalesce("scanned_at", "document__client_created_at", "document__created_at")
+    ).filter(at__date=day)
+    if warehouse_ids is not None:
+        lines = lines.filter(document__warehouse_id__in=warehouse_ids)
+    if user is not None:
+        lines = lines.filter(document__created_by=user)
+    counts = {row["hour"]: row["n"] for row in lines.annotate(hour=ExtractHour("at")).values("hour").annotate(n=Count("id"))}
+    return [{"hour": hour, "scans": counts.get(hour, 0)} for hour in range(24)]
 
 
 def low_stock(warehouse_ids=None):
@@ -97,12 +140,9 @@ def dashboard(user, warehouse_ids=None):
 
     from .serializers import DocumentSerializer
 
-    docs = Document.objects.filter(is_deleted=False).select_related("warehouse", "created_by").prefetch_related(
-        "lines__product__barcodes", "lines__product__base_unit", "lines__entered_unit"
-    )
+    docs = visible_documents(warehouse_ids)
     batches = SyncBatch.objects.select_related("user", "device").order_by("-received_at")
     if warehouse_ids is not None:
-        docs = docs.filter(Q(warehouse_id__in=warehouse_ids) | Q(destination_warehouse_id__in=warehouse_ids))
         batches = batches.filter(user=user)
     products = products_with_stock(warehouse_ids)
     low = low_stock(warehouse_ids)
@@ -115,6 +155,7 @@ def dashboard(user, warehouse_ids=None):
         "low_stock_count": low.count(),
         "documents_today": docs.filter(created_at__date=timezone.localdate()).count(),
         "drafts_count": docs.filter(status=Document.DRAFT).count(),
+        "incoming_transfers": incoming_transfers(warehouse_ids).count(),
         "active_workers": active_workers(warehouse_ids),
         "movements": movements_summary(warehouse_ids),
         "recent_documents": DocumentSerializer(docs[:6], many=True).data,

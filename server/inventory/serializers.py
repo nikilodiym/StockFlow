@@ -103,18 +103,19 @@ class DocumentSerializer(serializers.ModelSerializer):
     destination_name = serializers.CharField(source="destination_warehouse.name", read_only=True, default=None)
     created_by_name = serializers.CharField(source="created_by.get_full_name", read_only=True)
     total_quantity = serializers.SerializerMethodField()
+    in_transit = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Document
         fields = [
             "id", "number", "type", "status", "warehouse", "warehouse_name", "destination", "destination_name",
             "writeoff_reason", "inventory_mode", "counterparty", "external_ref", "note", "created_by",
-            "created_by_name", "device", "posted_by", "posted_at", "cancelled_by", "cancelled_at", "is_deleted",
-            "version", "client_created_at", "created_at", "updated_at", "total_quantity", "lines",
+            "created_by_name", "device", "posted_by", "posted_at", "cancelled_by", "cancelled_at", "received_by",
+            "received_at", "in_transit", "is_deleted", "version", "client_created_at", "created_at", "updated_at", "total_quantity", "lines",
         ]
         read_only_fields = [
             "number", "status", "created_by", "device", "posted_by", "posted_at", "cancelled_by", "cancelled_at",
-            "is_deleted", "version", "created_at", "updated_at",
+            "received_by", "received_at", "is_deleted", "version", "created_at", "updated_at",
         ]
 
     def get_total_quantity(self, doc) -> str:

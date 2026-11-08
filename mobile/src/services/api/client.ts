@@ -1,6 +1,12 @@
 /** HTTP client: timeouts, base URL and auth header in one place. */
 import { TIMEOUTS } from '../../constants/config';
 
+/**
+ * Free ngrok tunnels may answer with an HTML warning page instead of the API;
+ * this header turns it off (ignored by every other server).
+ */
+const TUNNEL_HEADERS = { 'ngrok-skip-browser-warning': '1' };
+
 export const joinUrl = (base: string, path: string): string => `${base.replace(/\/$/, '')}${path}`;
 
 /** fetch that gives up after `ms` instead of hanging (React Native fetch has no timeout). */
@@ -8,7 +14,8 @@ export async function fetchWithTimeout(url: string, options: RequestInit = {}, m
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), ms);
     try {
-        return await fetch(url, { ...options, signal: controller.signal });
+        const headers = { ...TUNNEL_HEADERS, ...(options.headers as Record<string, string> | undefined) };
+        return await fetch(url, { ...options, headers, signal: controller.signal });
     } catch (error) {
         if (controller.signal.aborted) {
             throw new Error(`Сервер не відповів за ${Math.round(ms / 1000)} с (${url.replace(/\/[^/]*\/?$/, '')})`);

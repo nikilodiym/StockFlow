@@ -79,6 +79,8 @@ npx expo start        # a — Android-емулятор, QR — телефон з
 
 Демо: `worker@gmail.com` / `worker`.
 
+**З будь-якого телефона (інша мережа, мобільний інтернет)** — через ngrok: на ПК `npm run tunnel:api` (з кореня), у `mobile/.env` задати `EXPO_PUBLIC_API_URL=https://<адреса ngrok>/api`, запустити `npm run start:tunnel -- -c`. Адреса з `.env` завжди має пріоритет. Деталі — `server/README.md`, розділ 6.
+
 ## Перевірки
 
 ```powershell

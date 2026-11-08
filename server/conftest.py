@@ -12,6 +12,16 @@ from inventory.models import Document, DocumentLine, Stock, Warehouse
 PASSWORD = "Sklad-2026!"
 
 
+@pytest.fixture(autouse=True)
+def _clear_cache():
+    """Login throttling counts requests in the cache; every test starts from zero."""
+    from django.core.cache import cache
+
+    cache.clear()
+    yield
+    cache.clear()
+
+
 @pytest.fixture
 def units(db):
     data = [("pcs", "шт", 0), ("kg", "кг", 3), ("pack", "упак", 0)]

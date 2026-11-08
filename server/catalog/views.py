@@ -1,7 +1,3 @@
-from decimal import Decimal
-
-from django.db.models import DecimalField, Prefetch, Q, Sum, Value
-from django.db.models.functions import Coalesce
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -9,11 +5,12 @@ from rest_framework.response import Response
 
 from core.permissions import IsStaff, IsStaffOrReadOnly
 
-from .models import Barcode, Category, ImportJob, Product, ProductUnit, Unit
+from .models import Barcode, Category, ImportJob, ProductUnit, Unit
 from .serializers import (
     BarcodeSerializer, CategorySerializer, ImportJobSerializer, ProductSerializer, ProductUnitSerializer,
     UnitSerializer,
 )
+from . import selectors
 from .services import resolve_barcode, run_import
 
 
@@ -47,23 +44,12 @@ class ProductViewSet(viewsets.ModelViewSet):
     ordering_fields = ["name", "sku", "price", "total_stock", "updated_at"]
 
     def get_queryset(self):
-        stock_filter = Q()
         warehouse = self.request.query_params.get("warehouse")
-        if warehouse and warehouse.isdigit():
-            stock_filter = Q(stock_rows__warehouse_id=int(warehouse))
-        queryset = (
-            Product.objects.select_related("category", "base_unit")
-            .prefetch_related(Prefetch("barcodes", queryset=Barcode.objects.filter(is_active=True)), "packings__unit")
-            .annotate(
-                total_stock=Coalesce(
-                    Sum("stock_rows__quantity", filter=stock_filter),
-                    Value(Decimal(0)),
-                    output_field=DecimalField(max_digits=14, decimal_places=3),
-                )
-            )
+        queryset = selectors.products_with_stock(
+            [int(warehouse)] if warehouse and warehouse.isdigit() else None,
+            # lists show active products; a single (even deactivated) product stays reachable by id
+            include_inactive=self.action != "list" or self.request.query_params.get("include_inactive") == "1",
         )
-        if self.action == "list" and self.request.query_params.get("include_inactive") != "1":
-            queryset = queryset.filter(is_active=True)
         return queryset.distinct() if self.request.query_params.get("search") else queryset
 
     def perform_destroy(self, instance):

@@ -1,3 +1,4 @@
+# Development. Production: docker-compose.prod.yml
 services:
   db:
     image: postgres:16-alpine
@@ -16,12 +17,25 @@ services:
   # Optional: the API itself in a container (locally you can also run it from .venv)
   api:
     build: ./server
-    environment:
+    command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+    environment: &api-env
       DJANGO_SETTINGS_MODULE: config.settings.dev
       DATABASE_URL: postgres://stockflow:stockflow@db:5432/stockflow
-      DJANGO_SECRET_KEY: change-me-before-deploy
+      DJANGO_SECRET_KEY: dev-only-insecure-key-change-me-before-any-deployment
       CORS_ALLOWED_ORIGINS: http://localhost:5173
     ports: ["8000:8000"]
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["api"]
+
+  # Hourly "device has not synced for a long time" notifications (manage.py check_devices).
+  scheduler:
+    build: ./server
+    command: ["sh", "-c", "while true; do python manage.py check_devices; sleep 3600; done"]
+    environment:
+      <<: *api-env
+      SKIP_MIGRATE: "1"
     depends_on:
       db:
         condition: service_healthy

@@ -1,0 +1,61 @@
+# Production on a server (VPS): PostgreSQL + API (gunicorn) + scheduler + Caddy (automatic HTTPS).
+#
+#   cp server/.env.prod.example server/.env.prod   # fill in DOMAIN, secrets, passwords
+#   docker compose -f docker-compose.prod.yml --env-file server/.env.prod up -d --build
+#
+# The domain's DNS A record must point to the server; Caddy then gets a Let's Encrypt certificate itself.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-stockflow}
+      POSTGRES_USER: ${POSTGRES_USER:-stockflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes: ["stockflow_pg_prod:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: ./server
+    restart: unless-stopped
+    environment: &api-env
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+      DATABASE_URL: postgres://${POSTGRES_USER:-stockflow}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-stockflow}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY}
+      ALLOWED_HOSTS: ${DOMAIN:?set DOMAIN}
+      CSRF_TRUSTED_ORIGINS: https://${DOMAIN}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      EXPO_PUSH_ENABLED: ${EXPO_PUSH_ENABLED:-0}
+    volumes: ["media:/app/media"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  scheduler:
+    build: ./server
+    restart: unless-stopped
+    command: ["sh", "-c", "while true; do python manage.py check_devices; sleep 3600; done"]
+    environment:
+      <<: *api-env
+      SKIP_MIGRATE: "1"
+    depends_on: [api]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [api]
+
+volumes:
+  stockflow_pg_prod:
+  media:
+  caddy_data:

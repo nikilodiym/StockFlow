@@ -2,12 +2,10 @@ from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.permissions import warehouse_ids
-from inventory.services import DocumentError
 
 from . import services
 from .models import Notification, SyncBatch, SyncConflict
@@ -89,14 +87,9 @@ class SyncConflictViewSet(viewsets.ReadOnlyModelViewSet):
     def resolve(self, request, pk=None):
         """'Keep local' (kept_local) applies the phone's version; 'Accept server' (kept_server) closes it."""
         conflict = self.get_object()
-        if not services.can_resolve(request.user, conflict):
-            raise PermissionDenied("Розв’язувати конфлікти може менеджер складу або автор")
         data = ResolveConflictSerializer(data=request.data)
         data.is_valid(raise_exception=True)
-        try:
-            conflict = services.resolve_conflict(conflict, request.user, data.validated_data["decision"])
-        except DocumentError as exc:
-            raise ValidationError({"detail": str(exc)})
+        conflict = services.resolve_conflict(conflict, request.user, data.validated_data["decision"])
         return Response(self.get_serializer(conflict).data)
 
 

@@ -1,11 +1,10 @@
-from decimal import Decimal
-
 import pytest
 from django.db import transaction
 from django.db.models import Sum
 
 from inventory.models import Document, Stock, StockMovement
-from inventory.services import DocumentError, can_edit, can_post, cancel_document, post_document
+from core.exceptions import AccessDenied
+from inventory.services import DocumentError, can_edit, can_post, cancel_document, post_document, receive_document
 from sync.models import Notification
 
 pytestmark = pytest.mark.django_db
@@ -24,13 +23,17 @@ class TestPosting:
         post_document(make_document("writeoff", warehouse, manager, [(product, 5)]), manager)
         assert stock_of(product, warehouse) == -2  # offline write-off may arrive before the receipt
 
-    def test_transfer_moves_between_warehouses(self, make_document, make_product, warehouse, warehouse2, admin, stock_of):
+    def test_transfer_leaves_source_then_destination_confirms(self, make_document, make_product, warehouse, warehouse2, admin, stock_of):
         product = make_product()
         post_document(make_document("receipt", warehouse, admin, [(product, 10)]), admin)
         doc = make_document("transfer", warehouse, admin, [(product, 4)], destination_warehouse=warehouse2)
-        post_document(doc, admin)
+        posted = post_document(doc, admin)
         assert stock_of(product, warehouse) == 6
+        assert stock_of(product, warehouse2) == 0, "goods are in transit until the destination confirms"
+        assert posted.in_transit
+        received = receive_document(posted, admin)
         assert stock_of(product, warehouse2) == 4
+        assert received.received_by == admin and not received.in_transit
         assert sorted(m.delta for m in doc.movements.all()) == [-4, 4]
 
     def test_partial_inventory_sets_counted_and_expected(self, make_document, make_product, warehouse, manager, stock_of):
@@ -99,7 +102,7 @@ class TestCancel:
         product = make_product()
         post_document(make_document("receipt", warehouse, admin, [(product, 10)]), admin)
         transfer = make_document("transfer", warehouse, admin, [(product, 4)], destination_warehouse=warehouse2)
-        post_document(transfer, admin)
+        receive_document(post_document(transfer, admin), admin)
         cancelled = cancel_document(transfer, admin)
         assert cancelled.status == "cancelled" and cancelled.cancelled_by == admin
         assert stock_of(product, warehouse) == 10 and stock_of(product, warehouse2) == 0
@@ -113,6 +116,33 @@ class TestCancel:
         cancel_document(doc, manager)
         with pytest.raises(DocumentError):
             cancel_document(doc, manager)
+
+
+class TestReceive:
+    def test_cancel_before_receipt_returns_goods_to_source(self, make_document, make_product, warehouse, warehouse2, admin, stock_of):
+        product = make_product()
+        post_document(make_document("receipt", warehouse, admin, [(product, 10)]), admin)
+        transfer = post_document(make_document("transfer", warehouse, admin, [(product, 4)], destination_warehouse=warehouse2), admin)
+        cancel_document(transfer, admin)
+        assert stock_of(product, warehouse) == 10 and stock_of(product, warehouse2) == 0
+
+    def test_only_destination_staff_can_receive(self, make_document, make_product, make_user, warehouse, warehouse2, admin, manager):
+        transfer = post_document(make_document("transfer", warehouse, admin, [(make_product(), 1)], destination_warehouse=warehouse2), admin)
+        with pytest.raises(AccessDenied):
+            receive_document(transfer, manager)  # manager of the source, not of the destination
+        receiver = make_user("lviv@test.ua", role="worker", warehouse=warehouse2)
+        assert receive_document(transfer, receiver).received_by == receiver
+
+    def test_receive_rules(self, make_document, make_product, warehouse, warehouse2, admin):
+        product = make_product()
+        with pytest.raises(DocumentError):
+            receive_document(make_document("receipt", warehouse, admin, [(product, 1)]), admin)
+        draft = make_document("transfer", warehouse, admin, [(product, 1)], destination_warehouse=warehouse2)
+        with pytest.raises(DocumentError):
+            receive_document(draft, admin)
+        receive_document(post_document(draft, admin), admin)
+        with pytest.raises(DocumentError):
+            receive_document(draft, admin)
 
 
 class TestRights:

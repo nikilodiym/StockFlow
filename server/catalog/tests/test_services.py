@@ -61,3 +61,24 @@ class TestImport:
         old = Product.objects.get(sku="OLD-1")
         assert old.name == "Нова назва" and old.price == Decimal("10.50") and old.version == 2
         assert Product.objects.get(sku="NEW-1").base_unit == units["kg"]
+
+
+def test_import_xlsx(admin, units, settings, tmp_path):
+    import io
+
+    from openpyxl import Workbook
+
+    settings.MEDIA_ROOT = tmp_path
+    book = Workbook()
+    sheet = book.active
+    sheet.append(["SKU", "Barcode", "Name", "Category", "Unit", "Price", "Min_stock"])
+    sheet.append(["X-1", "4820000000099", "Товар з Excel", "Напої", "кг", 12.5, 3])
+    sheet.append([None, None, None, None, None, None, None])  # empty rows are skipped
+    buffer = io.BytesIO()
+    book.save(buffer)
+    job = ImportJob.objects.create(file=SimpleUploadedFile("p.xlsx", buffer.getvalue()), created_by=admin)
+    job = run_import(job)
+    assert (job.status, job.rows_total, job.rows_created, job.rows_failed) == ("done", 1, 1, 0)
+    product = Product.objects.get(sku="X-1")
+    assert product.base_unit == units["kg"] and product.price == Decimal("12.50")
+    assert product.primary_barcode.code == "4820000000099"

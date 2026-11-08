@@ -25,11 +25,14 @@ const fallbackHost = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
 /** Default address: fixed one from .env (builds) or the Metro host (development). */
 export const DEFAULT_API_URL = ENV_API_URL || apiUrl(metroHost ?? fallbackHost);
 
-/** Addresses to try, best first: saved, .env, Metro host, emulator alias, localhost. */
+/**
+ * Addresses to try, best first. A fixed address from .env (ngrok / deployed server) always wins;
+ * otherwise: saved, Metro host, emulator alias, localhost.
+ */
 export function serverCandidates(saved?: string | null): string[] {
     const list = [
-        saved,
         ENV_API_URL || null,
+        saved,
         metroHost ? apiUrl(metroHost) : null,
         Platform.OS === 'android' ? apiUrl('10.0.2.2') : null,
         apiUrl('localhost'),

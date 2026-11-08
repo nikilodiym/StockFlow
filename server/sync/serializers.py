@@ -8,7 +8,7 @@ from .models import Notification, SyncBatch, SyncConflict
 class PushItemSerializer(serializers.Serializer):
     entity = serializers.ChoiceField(choices=["document"], default="document")
     id = serializers.UUIDField()
-    op = serializers.ChoiceField(choices=["create", "update", "delete", "post"])
+    op = serializers.ChoiceField(choices=["create", "update", "delete", "post", "receive"])
     base_version = serializers.IntegerField(required=False, allow_null=True, min_value=1)
     data = serializers.DictField(required=False, default=dict)
 

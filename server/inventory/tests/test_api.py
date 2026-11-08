@@ -128,3 +128,29 @@ def test_dashboard_keeps_old_keys(client_for, admin, warehouse, make_document, m
                 "recent_documents", "low_stock", "recent_syncs", "stock_value"):
         assert key in data
     assert data["low_stock_count"] == 1 and data["stock_units"] == 2
+
+
+class TestTransferReceiptApi:
+    def test_incoming_and_receive(self, client_for, admin, make_user, warehouse, warehouse2, make_document, make_product, stock_of):
+        product = make_product()
+        receiver = make_user("lviv@test.ua", role="worker", warehouse=warehouse2)
+        transfer = post_document(make_document("transfer", warehouse, admin, [(product, 3)], destination_warehouse=warehouse2), admin)
+        client = client_for(receiver)
+        incoming = client.get("/api/v1/documents/incoming/").data
+        assert [d["id"] for d in incoming] == [str(transfer.pk)] and incoming[0]["in_transit"] is True
+        response = client.post(f"/api/v1/documents/{transfer.pk}/receive/")
+        assert response.status_code == 200 and response.data["received_by"] == receiver.pk
+        assert stock_of(product, warehouse2) == 3
+        assert client.get("/api/v1/documents/incoming/").data == []
+
+    def test_source_manager_cannot_receive(self, client_for, admin, manager, warehouse, warehouse2, make_document, make_product):
+        transfer = post_document(make_document("transfer", warehouse, admin, [(make_product(), 1)], destination_warehouse=warehouse2), admin)
+        response = client_for(manager).post(f"/api/v1/documents/{transfer.pk}/receive/")
+        assert response.status_code == 403
+
+
+def test_scans_by_hour(client_for, worker, warehouse, make_document, make_product):
+    make_document("receipt", warehouse, worker, [(make_product(), 1), (make_product(), 2)])
+    hours = client_for(worker).get("/api/v1/reports/scans-by-hour/?mine=1").data
+    assert len(hours) == 24 and sum(h["scans"] for h in hours) == 2
+    assert client_for(worker).get("/api/v1/reports/scans-by-hour/?date=nope").status_code == 400

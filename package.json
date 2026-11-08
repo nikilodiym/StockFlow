@@ -13,7 +13,8 @@
     "migrate": "server\\.venv\\Scripts\\python.exe server/manage.py migrate",
     "api": "server\\.venv\\Scripts\\python.exe server/manage.py runserver 0.0.0.0:8000",
     "seed": "server\\.venv\\Scripts\\python.exe server/manage.py seed_demo",
-    "test:api": "cd server && .venv\\Scripts\\python.exe -m pytest"
+    "test:api": "cd server && .venv\\Scripts\\python.exe -m pytest",
+    "tunnel:api": "ngrok http 8000"
   },
   "devDependencies": {
     "@types/react": "~19.2.4",

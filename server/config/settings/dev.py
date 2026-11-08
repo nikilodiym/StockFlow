@@ -18,3 +18,7 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.SessionAuthentication",
     ],
 }
+
+# Serve static files from app dirs without collectstatic (dev only)
+WHITENOISE_AUTOREFRESH = True
+WHITENOISE_USE_FINDERS = True

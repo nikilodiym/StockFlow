@@ -14,3 +14,6 @@ DATABASES = {
 
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 EXPO_PUSH_ENABLED = False
+
+WHITENOISE_AUTOREFRESH = True
+WHITENOISE_USE_FINDERS = True

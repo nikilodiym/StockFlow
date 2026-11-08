@@ -1,10 +1,10 @@
-from django.contrib.auth import authenticate, get_user_model
-from django.contrib.auth.models import update_last_login
+from django.contrib.auth import get_user_model
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -16,7 +16,7 @@ from .serializers import (
     DeviceSerializer, LoginSerializer, LogoutSerializer, MembershipSerializer, PinLoginSerializer,
     SetPinSerializer, UserSerializer,
 )
-from .services import issue_tokens, register_device
+from . import services
 
 User = get_user_model()
 
@@ -25,42 +25,30 @@ class LoginView(APIView):
     """Email + password → JWT. Optionally registers the phone (`device`)."""
 
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
 
     @extend_schema(request=LoginSerializer, responses={200: dict})
     def post(self, request):
         data = LoginSerializer(data=request.data)
         data.is_valid(raise_exception=True)
-        email = data.validated_data["email"].strip().lower()
-        user = authenticate(request, username=email, password=data.validated_data["password"])
-        if not user:
-            return Response({"detail": "Невірний email або пароль"}, status=status.HTTP_401_UNAUTHORIZED)
-        register_device(user, data.validated_data.get("device"))
-        update_last_login(None, user)
-        return Response(issue_tokens(user))
+        v = data.validated_data
+        return Response(services.login_with_password(request, v["email"], v["password"], v.get("device")))
 
 
 class PinLoginView(APIView):
     """Quick login on a phone where the user already signed in with a password."""
 
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "pin"
 
     @extend_schema(request=PinLoginSerializer, responses={200: dict})
     def post(self, request):
         data = PinLoginSerializer(data=request.data)
         data.is_valid(raise_exception=True)
-        device = Device.objects.filter(pk=data.validated_data["device_id"]).first()
-        user = User.objects.filter(pk=data.validated_data["user_id"], is_active=True).first()
-        if not device or device.is_blocked or not user:
-            return Response({"detail": "Вхід за PIN недоступний на цьому пристрої"}, status=status.HTTP_403_FORBIDDEN)
-        if user.is_pin_locked():
-            return Response({"detail": "PIN тимчасово заблоковано. Увійдіть за паролем."}, status=status.HTTP_423_LOCKED)
-        if not user.check_pin(data.validated_data["pin"]):
-            return Response({"detail": "Невірний PIN"}, status=status.HTTP_401_UNAUTHORIZED)
-        device.user = user
-        device.apply_state({})
-        device.save(update_fields=["user", "last_seen_at"])
-        update_last_login(None, user)
-        return Response(issue_tokens(user))
+        v = data.validated_data
+        return Response(services.login_with_pin(v["device_id"], v["user_id"], v["pin"]))
 
 
 class SetPinView(APIView):

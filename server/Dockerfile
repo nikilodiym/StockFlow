@@ -4,5 +4,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
+RUN chmod +x docker-entrypoint.sh
 EXPOSE 8000
-CMD ["sh", "-c", "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"]
+# Migrations + static files on start, then the command below.
+ENTRYPOINT ["./docker-entrypoint.sh"]
+# Production server; docker-compose.yml overrides it with runserver for development.
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--access-logfile", "-"]

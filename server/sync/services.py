@@ -22,7 +22,8 @@ from rest_framework.exceptions import ValidationError as DRFValidationError
 from accounts.models import Device, Membership
 from core.permissions import is_manager, is_member, warehouse_ids
 from inventory.models import Document, Stock
-from inventory.services import DocumentError, can_edit, can_post, post_document
+from core.exceptions import AccessDenied, DomainError
+from inventory.services import DocumentError, can_edit, can_post, post_document, receive_document
 
 from .models import Notification, SyncBatch, SyncConflict
 
@@ -85,8 +86,8 @@ def send_push(notification_ids):
         log.exception("Expo push failed")
 
 
-def after_document_posted(document, touched):
-    """Called on commit of a posting: low stock alerts and incoming transfer notices."""
+def notify_low_stock(document, touched):
+    """Managers of a warehouse are told when a product drops to its minimum (once until read)."""
     rows = Stock.objects.select_related("product__base_unit", "warehouse").filter(
         quantity__lte=F("product__min_stock"), product__min_stock__gt=0
     )
@@ -106,10 +107,15 @@ def after_document_posted(document, touched):
             warehouse_id=row.warehouse_id,
             payload={"product_id": row.product_id, "warehouse_id": row.warehouse_id, "document_id": str(document.pk)},
         )
+
+
+def after_document_posted(document, touched):
+    """Called on commit of a posting: low stock alerts and incoming transfer notices."""
+    notify_low_stock(document, touched)
     if document.type == Document.TRANSFER:
         notify(
             members_of(document.destination_warehouse_id), Notification.TRANSFER_INCOMING,
-            f"Вхідне переміщення {document.number}", f"Зі складу «{document.warehouse.name}»",
+            f"Вхідне переміщення {document.number}", f"Зі складу «{document.warehouse.name}». Підтвердіть отримання.",
             warehouse_id=document.destination_warehouse_id, payload={"document_id": str(document.pk)},
         )
 
@@ -168,6 +174,8 @@ def _document_data(doc):
 
 
 def _error_text(exc):
+    if isinstance(exc, DomainError):
+        return exc.message[:500]
     if isinstance(exc, DRFValidationError):
         return json.dumps(exc.detail, ensure_ascii=False, default=str)[:500]
     return str(exc)[:500]
@@ -214,7 +222,7 @@ def _save_document(user, device, doc, data, doc_id=None):
     serializer.is_valid(raise_exception=True)
     warehouse = serializer.validated_data.get("warehouse") or (doc.warehouse if doc else None)
     if not warehouse or not is_member(user, warehouse.pk):
-        raise PermissionDenied("Немає доступу до цього складу")
+        raise AccessDenied("Немає доступу до цього складу")
     extra = {"device": device} if doc else {"device": device, "created_by": user}
     doc = serializer.save(**extra)
     if data.get("status") == Document.POSTED and can_post(user, doc):
@@ -240,8 +248,13 @@ def _process_item(user, device, batch, item):
 
             if doc is None:
                 return {**result, "result": ERROR, "error": "Документ не знайдено на сервері"}
+            if op == "receive":
+                if doc.received_at:
+                    return {**result, "result": DUPLICATE, "version": doc.version, "status": doc.status}
+                doc = receive_document(doc, user)
+                return {**result, "result": APPLIED, "version": doc.version, "number": doc.number, "status": doc.status}
             if not is_member(user, doc.warehouse_id):
-                raise PermissionDenied("Немає доступу до цього складу")
+                raise AccessDenied("Немає доступу до цього складу")
             if op == "post" and doc.status == Document.POSTED:
                 return {**result, "result": DUPLICATE, "version": doc.version, "status": doc.status}
             if doc.is_deleted:
@@ -253,22 +266,22 @@ def _process_item(user, device, batch, item):
 
             if op == "update":
                 if not can_edit(user, doc):
-                    raise PermissionDenied("Редагувати можна лише власні чернетки")
+                    raise AccessDenied("Редагувати можна лише власні чернетки")
                 if _has_inactive_products(data):
                     return {**result, **_conflict(batch, user, item, doc, SyncConflict.PRODUCT_INACTIVE)}
                 doc = _save_document(user, device, doc, data)
             elif op == "delete":
                 if not can_edit(user, doc):
-                    raise PermissionDenied("Видаляти можна лише власні чернетки")
+                    raise AccessDenied("Видаляти можна лише власні чернетки")
                 doc.is_deleted = True
                 doc.bump_version()
                 doc.save(update_fields=["is_deleted", "version", "updated_at"])
             elif op == "post":
                 if not can_post(user, doc):
-                    raise PermissionDenied("Проводити документи може лише менеджер складу")
+                    raise AccessDenied("Проводити документи може лише менеджер складу")
                 doc = post_document(doc, user)
             return {**result, "result": APPLIED, "version": doc.version, "number": doc.number, "status": doc.status}
-    except (DocumentError, DRFValidationError, PermissionDenied, ValueError) as exc:
+    except (DomainError, DRFValidationError, PermissionDenied, ValueError) as exc:
         return {**result, "result": ERROR, "error": _error_text(exc)}
 
 
@@ -388,6 +401,8 @@ def build_pull(user, cursor=None, device_id=None, device_state=None):
 # ============================================================================
 @transaction.atomic
 def resolve_conflict(conflict, user, decision):
+    if not can_resolve(user, conflict):
+        raise AccessDenied("Розв’язувати конфлікти може менеджер складу або автор")
     if conflict.status != SyncConflict.OPEN:
         raise DocumentError("Конфлікт уже розв’язано")
     if decision not in (SyncConflict.KEPT_LOCAL, SyncConflict.KEPT_SERVER):

@@ -66,6 +66,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # serves /static/ in production (gunicorn)
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -112,6 +113,10 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -132,6 +137,15 @@ REST_FRAMEWORK = {
         "rest_framework.filters.OrderingFilter",
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # Domain errors from services -> {"detail", "code"} with the right HTTP status.
+    "EXCEPTION_HANDLER": "core.exceptions.api_exception_handler",
+    # Lists are plain arrays unless ?page= / ?page_size= is given.
+    "DEFAULT_PAGINATION_CLASS": "core.pagination.OptionalPageNumberPagination",
+    # Brute-force protection for login endpoints (ScopedRateThrottle on the views).
+    "DEFAULT_THROTTLE_RATES": {
+        "login": env("THROTTLE_LOGIN", "10/min"),
+        "pin": env("THROTTLE_PIN", "10/min"),
+    },
 }
 
 SIMPLE_JWT = {
@@ -149,6 +163,7 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
     "SWAGGER_UI_SETTINGS": {"persistAuthorization": True},
+    "PREPROCESSING_HOOKS": ["core.schema.only_v1"],
 }
 
 # StockFlow business settings

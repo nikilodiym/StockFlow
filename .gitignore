@@ -14,3 +14,5 @@ server/db.sqlite3
 .pytest_cache/
 server/media/
 server/staticfiles/
+backups/
+server/.env.prod

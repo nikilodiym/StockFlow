@@ -68,15 +68,42 @@ def _decimal(value, default="0"):
         raise ValueError(f"Некоректне число: {value}")
 
 
+def _csv_rows(data: bytes) -> list[dict]:
+    text = data.decode("utf-8-sig")
+    dialect = csv.Sniffer().sniff(text.splitlines()[0] if text else ",", delimiters=",;\t")
+    return list(csv.DictReader(io.StringIO(text), dialect=dialect))
+
+
+def _xlsx_rows(data: bytes) -> list[dict]:
+    """First sheet; the first row holds the column names."""
+    from openpyxl import load_workbook
+
+    sheet = load_workbook(io.BytesIO(data), read_only=True, data_only=True).worksheets[0]
+    values = list(sheet.iter_rows(values_only=True))
+    if not values:
+        return []
+    header = [str(cell or "").strip() for cell in values[0]]
+    rows = []
+    for row in values[1:]:
+        if row is None or all(cell in (None, "") for cell in row):
+            continue
+        rows.append({header[i]: "" if cell is None else str(cell) for i, cell in enumerate(row) if i < len(header)})
+    return rows
+
+
+def read_rows(data: bytes) -> list[dict]:
+    """CSV (comma, semicolon or tab) or Excel .xlsx — detected by content (xlsx is a zip: starts with PK)."""
+    return _xlsx_rows(data) if data[:2] == b"PK" else _csv_rows(data)
+
+
 def run_import(job: ImportJob):
-    """CSV import: upsert products by sku, barcodes by code. Errors are collected per row."""
+    """CSV/XLSX import: upsert products by sku, barcodes by code. Errors are collected per row."""
     job.status = ImportJob.PROCESSING
     job.save(update_fields=["status"])
     job.file.open("rb")
-    text = job.file.read().decode("utf-8-sig")
+    data = job.file.read()
     job.file.close()
-    dialect = csv.Sniffer().sniff(text.splitlines()[0] if text else ",", delimiters=",;\t")
-    rows = list(csv.DictReader(io.StringIO(text), dialect=dialect))
+    rows = read_rows(data)
     default_unit = Unit.objects.filter(code="pcs").first()
     errors = []
     created = updated = 0
