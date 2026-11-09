@@ -9,7 +9,7 @@ import { warehouseId } from '../../inventory/services/DocumentService';
 const ROLES: [string, string][] = [
     ['Комірник', 'Сканування, документи та облік товару'],
     ['Менеджер', 'Контроль складу й звітність'],
-    ['Адміністратор', 'Налаштування та керування доступом'],
+    ['Адміністратор', 'Усі права комірника й менеджера на всіх складах, налаштування та керування доступом'],
 ];
 
 /** Access levels; the badge follows the user's actual warehouse membership. */

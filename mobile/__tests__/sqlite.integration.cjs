@@ -11,7 +11,8 @@ function loadSource() {
     const cache = new Map();
     function load(file) {
         file = path.resolve(file);
-        if (!path.extname(file)) file = fs.existsSync(file + '.ts') ? file + '.ts' : path.join(file, 'index.ts');
+        if (!path.extname(file))
+            file = fs.existsSync(file + '.ts') ? file + '.ts' : path.join(file, 'index.ts');
         assert.ok(file.startsWith(root + path.sep));
         if (cache.has(file)) return cache.get(file).exports;
         const js = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
@@ -26,7 +27,15 @@ function loadSource() {
         };
         vm.runInNewContext(
             js,
-            { module, exports: module.exports, require: localRequire, process: { env: {} }, Date, Math, JSON },
+            {
+                module,
+                exports: module.exports,
+                require: localRequire,
+                process: { env: {} },
+                Date,
+                Math,
+                JSON,
+            },
             { filename: file },
         );
         return module.exports;
@@ -60,17 +69,13 @@ async function setup(t) {
     const load = loadSource(),
         db = database(t);
     await load('src/database/migrations').runMigrations(db);
-    await db.runAsync('INSERT INTO products (id,sku,barcode,name,unit,stock,server_id) VALUES (1,?,?,?,?,?,?)', [
-        'PNT-1',
-        '123456',
-        'Фарба',
-        'шт',
-        126,
-        42,
-    ]);
+    await db.runAsync(
+        'INSERT INTO products (id,sku,barcode,name,unit,stock,server_id) VALUES (1,?,?,?,?,?,?)',
+        ['PNT-1', '123456', 'Фарба', 'шт', 126, 42],
+    );
     return { load, db };
 }
-test('migration 3 preserves products, documents and queued payloads from version 2', async (t) => {
+test('migrations preserve documents and queued payloads from version 2', async (t) => {
     const load = loadSource(),
         db = database(t),
         schema = load('src/database/schema');
@@ -78,17 +83,69 @@ test('migration 3 preserves products, documents and queued payloads from version
     await db.runAsync(
         "INSERT INTO documents(id,type,status,warehouse,created_at) VALUES ('old','receipt','draft',1,'2026-11-08')",
     );
-    await db.runAsync("INSERT INTO outbox(id,payload,created_at) VALUES ('old','saved-payload','2026-11-08')");
+    await db.runAsync(
+        "INSERT INTO outbox(id,payload,created_at) VALUES ('old','saved-payload','2026-11-08')",
+    );
     await load('src/database/migrations').runMigrations(db);
-    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 3);
-    assert.equal((await db.getFirstAsync("SELECT payload FROM outbox WHERE id='old'")).payload, 'saved-payload');
-    assert.equal((await db.getFirstAsync("SELECT created_by FROM documents WHERE id='old'")).created_by, null);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 4);
+    assert.equal(
+        (await db.getFirstAsync("SELECT payload FROM outbox WHERE id='old'")).payload,
+        'saved-payload',
+    );
+    assert.equal(
+        (await db.getFirstAsync("SELECT created_by FROM documents WHERE id='old'")).created_by,
+        null,
+    );
+    assert.equal(
+        (await db.getFirstAsync("SELECT destination FROM documents WHERE id='old'")).destination,
+        null,
+    );
     await load('src/database/migrations').runMigrations(db);
+});
+
+test('transfer destination survives reloads and requeuing without leaking into receipts', async (t) => {
+    const { load, db } = await setup(t);
+    const repo = load('src/features/inventory/repositories/DocumentRepository').DocumentRepository;
+    const { queueSavedDocument } = load('src/features/inventory/services/DraftService');
+    await repo.createDraft(db, {
+        id: 'transfer',
+        type: 'transfer',
+        warehouse: 1,
+        createdAt: '2026-11-09',
+        createdBy: 10,
+    });
+    await repo.insertLine(db, 1, 3, 'шт', 'transfer');
+    await db.runAsync('UPDATE documents SET destination=2 WHERE id=?', ['transfer']);
+    await queueSavedDocument(db, 'transfer', 'android');
+    assert.equal((await repo.list(db))[0].destination, 2);
+    assert.equal(
+        JSON.parse((await repo.getOutbox(db, 'transfer')).payload).changes[0].document.destination,
+        2,
+    );
+    await repo.createDraft(db, {
+        id: 'receipt',
+        type: 'receipt',
+        warehouse: 1,
+        createdAt: '2026-11-09',
+        createdBy: 10,
+    });
+    await repo.insertLine(db, 1, 4, 'шт', 'receipt');
+    await queueSavedDocument(db, 'receipt', 'android');
+    assert.equal(
+        'destination' in JSON.parse((await repo.getOutbox(db, 'receipt')).payload).changes[0].document,
+        false,
+    );
 });
 test('scans go only to the chosen draft and its outbox reflects repeated additions', async (t) => {
     const { load, db } = await setup(t);
     const repo = load('src/features/inventory/repositories/DocumentRepository').DocumentRepository;
-    await repo.createDraft(db, { id: 'first', type: 'receipt', warehouse: 1, createdAt: '2026-11-08', createdBy: 10 });
+    await repo.createDraft(db, {
+        id: 'first',
+        type: 'receipt',
+        warehouse: 1,
+        createdAt: '2026-11-08',
+        createdBy: 10,
+    });
     await repo.createDraft(db, {
         id: 'second',
         type: 'writeoff',
@@ -96,7 +153,15 @@ test('scans go only to the chosen draft and its outbox reflects repeated additio
         createdAt: '2026-11-08',
         createdBy: 10,
     });
-    const product = { id: 1, sku: 'PNT-1', barcode: '123456', name: 'Фарба', unit: 'шт', stock: 126, server_id: 42 };
+    const product = {
+        id: 1,
+        sku: 'PNT-1',
+        barcode: '123456',
+        name: 'Фарба',
+        unit: 'шт',
+        stock: 126,
+        server_id: 42,
+    };
     const { addProductToDocument } = load('src/features/inventory/services/DraftService');
     await addProductToDocument(db, 'second', product, 2, 'android');
     await addProductToDocument(db, 'second', product, 3, 'android');
@@ -113,7 +178,13 @@ test('scans go only to the chosen draft and its outbox reflects repeated additio
 test('different entered units remain separate lines and posted documents reject scans', async (t) => {
     const { load, db } = await setup(t),
         repo = load('src/features/inventory/repositories/DocumentRepository').DocumentRepository;
-    await repo.createDraft(db, { id: 'draft', type: 'receipt', warehouse: 1, createdAt: '2026-11-08', createdBy: 10 });
+    await repo.createDraft(db, {
+        id: 'draft',
+        type: 'receipt',
+        warehouse: 1,
+        createdAt: '2026-11-08',
+        createdBy: 10,
+    });
     const product = { id: 1, sku: 'PNT-1', barcode: '123456', name: 'Фарба', unit: 'шт', stock: 126 };
     const { addProductToDocument } = load('src/features/inventory/services/DraftService');
     await addProductToDocument(db, 'draft', product, 2, 'android');

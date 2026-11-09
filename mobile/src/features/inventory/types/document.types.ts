@@ -20,6 +20,7 @@ export type SavedDocument = {
     /** 1 when it is no longer waiting in the outbox. */
     is_synced?: number;
     warehouse?: number;
+    destination?: number | null;
     created_by?: number | null;
     note?: string;
     line_count?: number;
@@ -41,6 +42,7 @@ export type LegacySyncPayload = {
             type: DocumentType;
             status: string;
             warehouse: number;
+            destination?: number | null;
             note: string;
             created_at: string;
             lines: { product: number; quantity: number; unit: string }[];

@@ -8,7 +8,7 @@ ADMIN = "admin"
 
 def role_on(user, warehouse_id):
     """Role of `user` on one warehouse: 'admin' for staff, else 'manager'/'worker'/None."""
-    if not user or not user.is_authenticated:
+    if not user or not user.is_authenticated or not user.is_active:
         return None
     if user.is_staff:
         return ADMIN

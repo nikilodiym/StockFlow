@@ -33,14 +33,16 @@ export const DocumentRepository = {
     setLineQuantity: (db: SQLiteDatabase, lineId: number, quantity: number) =>
         db.runAsync('UPDATE lines SET quantity = ? WHERE id = ?', [quantity, lineId]),
 
-    deleteLine: (db: SQLiteDatabase, lineId: number) => db.runAsync('DELETE FROM lines WHERE id = ?', [lineId]),
+    deleteLine: (db: SQLiteDatabase, lineId: number) =>
+        db.runAsync('DELETE FROM lines WHERE id = ?', [lineId]),
 
-    clearActive: (db: SQLiteDatabase) => db.runAsync('DELETE FROM lines WHERE document_id = ?', [ACTIVE_DOCUMENT_ID]),
+    clearActive: (db: SQLiteDatabase) =>
+        db.runAsync('DELETE FROM lines WHERE document_id = ?', [ACTIVE_DOCUMENT_ID]),
 
     // --- documents ---------------------------------------------------------
     async list(db: SQLiteDatabase): Promise<SavedDocument[]> {
         const rows = await db.getAllAsync<Parameters<typeof DocumentModel.fromRow>[0]>(
-            `SELECT documents.id, documents.type, documents.status, documents.created_at, documents.warehouse, documents.created_by, documents.note,
+            `SELECT documents.id, documents.type, documents.status, documents.created_at, documents.warehouse, documents.destination, documents.created_by, documents.note,
                     (SELECT COUNT(*) FROM lines WHERE lines.document_id = documents.id) AS line_count,
                     CASE WHEN outbox.id IS NULL THEN 1 ELSE 0 END AS is_synced
              FROM documents LEFT JOIN outbox ON outbox.id = documents.id
@@ -57,6 +59,7 @@ export const DocumentRepository = {
             type: DocumentType;
             status: string;
             warehouse: number;
+            destination?: number | null;
             note: string;
             createdAt: string;
             payload: string;
@@ -65,10 +68,22 @@ export const DocumentRepository = {
     ): Promise<void> {
         await db.withTransactionAsync(async () => {
             await db.runAsync(
-                'INSERT INTO documents (id, type, status, warehouse, note, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                [doc.id, doc.type, doc.status, doc.warehouse, doc.note, doc.createdAt, doc.createdBy ?? null],
+                'INSERT INTO documents (id, type, status, warehouse, note, created_at, created_by, destination) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                [
+                    doc.id,
+                    doc.type,
+                    doc.status,
+                    doc.warehouse,
+                    doc.note,
+                    doc.createdAt,
+                    doc.createdBy ?? null,
+                    doc.type === 'transfer' ? (doc.destination ?? null) : null,
+                ],
             );
-            await db.runAsync('UPDATE lines SET document_id = ? WHERE document_id = ?', [doc.id, ACTIVE_DOCUMENT_ID]);
+            await db.runAsync('UPDATE lines SET document_id = ? WHERE document_id = ?', [
+                doc.id,
+                ACTIVE_DOCUMENT_ID,
+            ]);
             await db.runAsync('INSERT INTO outbox (id, payload, created_at) VALUES (?, ?, ?)', [
                 doc.id,
                 doc.payload,

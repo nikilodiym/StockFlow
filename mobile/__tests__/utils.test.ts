@@ -33,8 +33,14 @@ describe('formatters', () => {
 
 describe('server address', () => {
     it('parseServerUrl splits host and port', () => {
-        expect(parseServerUrl('http://192.168.0.110:8000/api')).toEqual({ host: '192.168.0.110', port: '8000' });
-        expect(parseServerUrl('https://api.example.com/api')).toEqual({ host: 'api.example.com', port: '8000' });
+        expect(parseServerUrl('http://192.168.0.110:8000/api')).toEqual({
+            host: '192.168.0.110',
+            port: '8000',
+        });
+        expect(parseServerUrl('https://api.example.com/api')).toEqual({
+            host: 'api.example.com',
+            port: '8000',
+        });
     });
     it('serverCandidates puts the saved address first, without duplicates', () => {
         const list = serverCandidates('http://10.0.0.5:8000/api/');
@@ -46,8 +52,8 @@ describe('server address', () => {
 
 describe('migrations', () => {
     it('runs only missing versions, in order', () => {
-        expect(pendingMigrations(0).map((m) => m.version)).toEqual([1, 2, 3]);
-        expect(pendingMigrations(1).map((m) => m.version)).toEqual([2, 3]);
+        expect(pendingMigrations(0).map((m) => m.version)).toEqual([1, 2, 3, 4]);
+        expect(pendingMigrations(1).map((m) => m.version)).toEqual([2, 3, 4]);
         expect(pendingMigrations(LATEST_VERSION)).toEqual([]);
     });
 });

@@ -55,3 +55,8 @@ export const SCHEMA_V3 = `
     ALTER TABLE documents ADD COLUMN created_by INTEGER;
     ALTER TABLE products ADD COLUMN units_json TEXT;
 `;
+
+/** Version 4 — the receiving warehouse belongs only to transfer documents. */
+export const SCHEMA_V4 = `
+    ALTER TABLE documents ADD COLUMN destination INTEGER;
+`;

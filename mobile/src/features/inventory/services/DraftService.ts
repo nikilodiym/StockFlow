@@ -44,6 +44,7 @@ export async function queueSavedDocument(db: SQLiteDatabase, id: string, deviceI
         type: doc.type,
         status: doc.status,
         warehouse: doc.warehouse ?? 1,
+        destination: doc.destination,
         note: doc.note ?? '',
         createdAt: doc.created_at,
         items,

@@ -9,13 +9,15 @@ import { ACTIVE_DOCUMENT_ID } from '../../../constants/config';
 import { uuid } from '../../../utils/formatters';
 import type { Product } from '../../products/types/product.types';
 import { DocumentRepository } from '../repositories/DocumentRepository';
-import { buildSyncPayload, warehouseId } from '../services/DocumentService';
+import { buildSyncPayload, validateTransfer, warehouseId } from '../services/DocumentService';
 import { addProductToDocument, queueSavedDocument } from '../services/DraftService';
 import type { DocumentItem, DocumentType, SavedDocument } from '../types/document.types';
 
 type InventoryContextValue = {
     docType: DocumentType;
     setDocType: (type: DocumentType) => void;
+    destination: number | null;
+    setDestination: (destination: number | null, documentId?: string) => Promise<void>;
     quantity: string;
     setQuantity: (value: string) => void;
     items: DocumentItem[];
@@ -49,6 +51,7 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     const { user } = useAuth();
     const { warehouse } = useSettings();
     const [docType, setDocType] = useState<DocumentType>('receipt');
+    const [destination, setCurrentDestination] = useState<number | null>(null);
     const [quantity, setQuantity] = useState('1');
     const [items, setItems] = useState<DocumentItem[]>([]);
     const [targetItems, setTargetItems] = useState<DocumentItem[]>([]);
@@ -69,7 +72,10 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
         [user, warehouse],
     );
     const refreshDocs = useCallback(async () => {
-        const [docs, count] = await Promise.all([DocumentRepository.list(db), DocumentRepository.outboxCount(db)]);
+        const [docs, count] = await Promise.all([
+            DocumentRepository.list(db),
+            DocumentRepository.outboxCount(db),
+        ]);
         setSavedDocs(docs);
         setOutboxCount(count);
     }, [db]);
@@ -119,7 +125,8 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     const addItem = useCallback(
         (product: Product, amount: number) =>
             mutate(async () => {
-                if (!Number.isFinite(amount) || amount <= 0) throw new Error('Введіть коректну кількість товару.');
+                if (!Number.isFinite(amount) || amount <= 0)
+                    throw new Error('Введіть коректну кількість товару.');
                 const id = scanDocumentId ?? ACTIVE_DOCUMENT_ID;
                 const doc = scanDocumentId ? await DocumentRepository.get(db, scanDocumentId) : undefined;
                 if (scanDocumentId && !doc) throw new Error('Документ не знайдено.');
@@ -133,9 +140,10 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     );
     const applyDelta = useCallback(
         async (item: DocumentItem, delta: number) => {
-            const row = await db.getFirstAsync<{ quantity: number }>('SELECT quantity FROM lines WHERE id=?', [
-                item.line_id ?? -1,
-            ]);
+            const row = await db.getFirstAsync<{ quantity: number }>(
+                'SELECT quantity FROM lines WHERE id=?',
+                [item.line_id ?? -1],
+            );
             if (!row) throw new Error('Позицію не знайдено.');
             const next = Number(row.quantity) + delta;
             if (next <= 0) await DocumentRepository.deleteLine(db, item.line_id ?? -1);
@@ -170,12 +178,39 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
         [db, applyDelta, mutate, requireAccess, refreshDocs, scanDocumentId],
     );
     const loadItems = useCallback((id: string) => DocumentRepository.getLines(db, id), [db]);
+    const setDestination = useCallback(
+        (value: number | null, id?: string) =>
+            mutate(async () => {
+                const doc = id ? await DocumentRepository.get(db, id) : null;
+                if (id && !doc) throw new Error('Документ не знайдено.');
+                requireAccess(doc?.status === 'posted' ? 'document.post' : 'document.edit', doc ?? undefined);
+                if ((doc?.type ?? docType) !== 'transfer')
+                    throw new Error('Склад-одержувач потрібен лише для переміщення.');
+                if (value !== null)
+                    validateTransfer('transfer', doc?.warehouse ?? warehouseId(warehouse), value);
+                if (!id) {
+                    setCurrentDestination(value);
+                    return;
+                }
+                // Previously queued transfers can be repaired without changing their type or lines.
+                if (doc?.status !== 'draft' && !(await DocumentRepository.getOutbox(db, id)))
+                    throw new Error('Синхронізований документ уже не можна змінювати.');
+                await db.withTransactionAsync(async () => {
+                    await db.runAsync('UPDATE documents SET destination = ? WHERE id = ?', [value, id]);
+                    await queueSavedDocument(db, id, Platform.OS);
+                });
+                await refreshDocs();
+            }),
+        [db, docType, mutate, refreshDocs, requireAccess, warehouse],
+    );
     const saveCurrent = useCallback(
         (status: 'draft' | 'posted', selectedWarehouse: string) =>
             mutate(async () => {
                 requireAccess(status === 'posted' ? 'document.post' : 'document.create');
                 const rows = await DocumentRepository.getLines(db);
                 if (!rows.length) throw new Error('Спочатку додайте хоча б один товар.');
+                if (status === 'posted')
+                    validateTransfer(docType, warehouseId(selectedWarehouse), destination);
                 const id = uuid(),
                     createdAt = new Date().toISOString();
                 const payload = buildSyncPayload({
@@ -183,6 +218,7 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
                     type: docType,
                     status,
                     warehouse: warehouseId(selectedWarehouse),
+                    destination,
                     note: docNote,
                     createdAt,
                     items: rows,
@@ -193,6 +229,7 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
                     type: docType,
                     status,
                     warehouse: warehouseId(selectedWarehouse),
+                    destination,
                     note: docNote,
                     createdAt,
                     payload: JSON.stringify(payload),
@@ -200,10 +237,11 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
                 });
                 setItems([]);
                 setDocNote('');
+                setCurrentDestination(null);
                 await refreshDocs();
                 return id;
             }),
-        [db, docNote, docType, mutate, refreshDocs, requireAccess, user],
+        [db, destination, docNote, docType, mutate, refreshDocs, requireAccess, user],
     );
     const postSaved = useCallback(
         (id: string) =>
@@ -212,7 +250,9 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
                 if (!doc) throw new Error('Документ не знайдено.');
                 requireAccess('document.post', doc);
                 if (doc.status !== 'draft') throw new Error('Провести можна лише чернетку.');
-                if (!(await DocumentRepository.getLines(db, id)).length) throw new Error('Документ порожній.');
+                validateTransfer(doc.type, doc.warehouse ?? 1, doc.destination);
+                if (!(await DocumentRepository.getLines(db, id)).length)
+                    throw new Error('Документ порожній.');
                 await db.withTransactionAsync(async () => {
                     await DocumentRepository.setStatus(db, id, 'posted');
                     await queueSavedDocument(db, id, Platform.OS);
@@ -261,6 +301,8 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
         () => ({
             docType,
             setDocType,
+            destination,
+            setDestination,
             quantity,
             setQuantity,
             items,
@@ -285,6 +327,8 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
         }),
         [
             docType,
+            destination,
+            setDestination,
             quantity,
             items,
             targetItems,

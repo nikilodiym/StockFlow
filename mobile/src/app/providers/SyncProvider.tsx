@@ -38,7 +38,12 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         async (showEmptyQueueMessage = true) => {
             if (busy.current) return;
             if (!token) {
-                showDialog('Потрібен вхід', 'Увійдіть до облікового запису перед синхронізацією.', undefined, 'error');
+                showDialog(
+                    'Потрібен вхід',
+                    'Увійдіть до облікового запису перед синхронізацією.',
+                    undefined,
+                    'error',
+                );
                 return;
             }
             busy.current = true;
@@ -61,10 +66,12 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
                         undefined,
                         'error',
                     );
-                } else if (push.status === 'conflict') {
+                } else if (push.status === 'partial') {
                     showDialog(
-                        'Конфлікт синхронізації',
-                        'Сервер і пристрій мають різні зміни. Відкрийте документ і оберіть потрібну версію.',
+                        'Синхронізовано частково',
+                        `Передано документів: ${push.synced}. Залишилося в черзі: ${push.issues.length}.\n` +
+                            push.issues.map((issue) => `${issue.label}: ${issue.message}`).join('\n') +
+                            pulledNote(pulled),
                         [{ label: 'До документів', tone: 'primary', onPress: navigateToDocuments }],
                         'error',
                     );

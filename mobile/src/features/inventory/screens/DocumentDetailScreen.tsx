@@ -9,6 +9,7 @@ import Icon from '../../../components/ui/Icon';
 import Input from '../../../components/ui/Input';
 import { useSettings } from '../../../app/providers/SettingsProvider';
 import { useSync } from '../../../app/providers/SyncProvider';
+import { useDialog } from '../../../app/providers/DialogProvider';
 import { WAREHOUSES } from '../../../constants/config';
 import { usePermissions } from '../../../hooks/usePermissions';
 import type { RootScreenProps } from '../../../app/navigation/types';
@@ -36,11 +37,14 @@ export default function DocumentDetailScreen({ navigation, route }: RootScreenPr
         changeSavedItemQuantity,
         selectScanDocument,
         refreshDocs,
+        destination,
+        setDestination,
     } = useInventory();
     const { post, remove, saveCurrentDocument } = useDocumentActions(docId);
     const printing = useDocumentPrinting();
     const { sync } = useSync();
     const { reportError } = usePermissions();
+    const { showDialog } = useDialog();
     const [savedItems, setSavedItems] = useState<DocumentItem[]>([]);
     const saved = docId ? savedDocs.find((d) => d.id === docId) : undefined;
     const type = saved?.type ?? docType,
@@ -48,6 +52,23 @@ export default function DocumentDetailScreen({ navigation, route }: RootScreenPr
     const editable = !docId || saved?.status === 'draft';
     const title = `${TYPE_LABEL[type]} · ${dateLabel(saved?.created_at ?? new Date().toISOString())}`;
     const selectedWarehouse = WAREHOUSES.find((w) => w.id === saved?.warehouse)?.name ?? warehouse;
+    const receivingWarehouse = saved ? saved.destination : destination;
+    const pickDestination = () =>
+        showDialog(
+            'Склад-одержувач',
+            'Куди перемістити товари?',
+            WAREHOUSES.filter((w) => w.name !== selectedWarehouse).map((w) => ({
+                label: w.name,
+                onPress: async () => {
+                    try {
+                        await setDestination(w.id, docId);
+                    } catch (e) {
+                        reportError(e);
+                    }
+                },
+            })),
+            'sheet',
+        );
     useFocusEffect(
         useCallback(() => {
             let active = true;
@@ -96,7 +117,10 @@ export default function DocumentDetailScreen({ navigation, route }: RootScreenPr
                 right={
                     <View style={s.actions}>
                         {!docId && (
-                            <HeaderIconButton label="Зберегти чернетку" onPress={() => void saveCurrentDocument()}>
+                            <HeaderIconButton
+                                label="Зберегти чернетку"
+                                onPress={() => void saveCurrentDocument()}
+                            >
                                 <Icon name="file" size={20} />
                             </HeaderIconButton>
                         )}
@@ -140,7 +164,17 @@ export default function DocumentDetailScreen({ navigation, route }: RootScreenPr
                         <Text style={s.statValue}>{totalQuantity(rows)}</Text>
                     </View>
                 </View>
-                <Text style={s.label}>{type === 'receipt' ? 'Товари з накладної' : 'Відскановані товари'}</Text>
+                {type === 'transfer' && (
+                    <Button
+                        variant="secondary"
+                        label={`Склад-одержувач: ${WAREHOUSES.find((w) => w.id === receivingWarehouse)?.name ?? 'оберіть склад'}`}
+                        disabled={!editable && !!saved?.is_synced}
+                        onPress={pickDestination}
+                    />
+                )}
+                <Text style={s.label}>
+                    {type === 'receipt' ? 'Товари з накладної' : 'Відскановані товари'}
+                </Text>
                 <DocumentItemList
                     items={rows}
                     onChange={editable ? (item, delta) => void change(item, delta) : undefined}
@@ -180,7 +214,10 @@ export default function DocumentDetailScreen({ navigation, route }: RootScreenPr
                             onPress={() => open('Scanner')}
                         />
                         {!!rows.length && (
-                            <Pressable style={{ alignSelf: 'center', paddingTop: 8 }} onPress={() => open('Search')}>
+                            <Pressable
+                                style={{ alignSelf: 'center', paddingTop: 8 }}
+                                onPress={() => open('Search')}
+                            >
                                 <Text style={s.link}>Додати товар вручну</Text>
                             </Pressable>
                         )}
@@ -214,7 +251,14 @@ const baseStyles = StyleSheet.create({
     conflict: { color: '#D64545', backgroundColor: '#FDE2E2' },
     synced: { color: '#16816A', backgroundColor: '#D7F2E1' },
     warehouse: { fontSize: 11, color: '#606876' },
-    stats: { flexDirection: 'row', gap: 16, backgroundColor: '#fff', padding: 16, borderRadius: 14, marginTop: 16 },
+    stats: {
+        flexDirection: 'row',
+        gap: 16,
+        backgroundColor: '#fff',
+        padding: 16,
+        borderRadius: 14,
+        marginTop: 16,
+    },
     statLabel: { fontSize: 11, color: '#606876' },
     statValue: { fontSize: 20, fontWeight: '600', color: '#182021', marginTop: 6 },
     label: { fontSize: 12, color: '#606876', marginTop: 18, marginBottom: 8 },

@@ -24,7 +24,7 @@ export const SyncService = {
             /* Push preserves unresolved lines in the outbox. */
         }
         const push = await PushService.push(db, serverUrl, token);
-        if (push.status !== 'ok') return { push, pulled: null };
+        if (push.status === 'unauthorized') return { push, pulled: null };
         try {
             return { push, pulled: await PullService.pull(db, serverUrl, token) };
         } catch (error) {

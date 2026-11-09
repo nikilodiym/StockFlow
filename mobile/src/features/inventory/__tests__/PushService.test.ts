@@ -3,7 +3,6 @@ import { PushService } from '../../../services/sync/PushService';
 import { apiRequest } from '../../../services/api/client';
 import { DocumentRepository } from '../repositories/DocumentRepository';
 import { ProductRepository } from '../../products/repositories/ProductRepository';
-import { PermissionError } from '../../auth/services/PermissionService';
 jest.mock('../../../services/api/client', () => ({
     apiRequest: jest.fn(),
     readJson: async (r: { json: () => Promise<unknown> }) => r.json(),
@@ -11,7 +10,9 @@ jest.mock('../../../services/api/client', () => ({
 jest.mock('../repositories/DocumentRepository', () => ({
     DocumentRepository: { listOutbox: jest.fn(), deleteOutbox: jest.fn(), setStatus: jest.fn() },
 }));
-jest.mock('../../products/repositories/ProductRepository', () => ({ ProductRepository: { serverIdMap: jest.fn() } }));
+jest.mock('../../products/repositories/ProductRepository', () => ({
+    ProductRepository: { serverIdMap: jest.fn() },
+}));
 const db = {} as SQLiteDatabase;
 beforeEach(() => {
     jest.clearAllMocks();
@@ -19,7 +20,9 @@ beforeEach(() => {
         {
             id: 'draft',
             created_at: '',
-            payload: JSON.stringify({ changes: [{ document: { lines: [{ product: 1, quantity: 2, unit: 'шт' }] } }] }),
+            payload: JSON.stringify({
+                changes: [{ document: { lines: [{ product: 1, quantity: 2, unit: 'шт' }] } }],
+            }),
         },
     ]);
     jest.mocked(ProductRepository.serverIdMap).mockResolvedValue(new Map([[1, 12]]));
@@ -39,7 +42,11 @@ it('keeps a document queued when an HTTP 200 contains a rejected result', async 
             ],
         }),
     } as Response);
-    await expect(PushService.push(db, 'http://server/api', 'token')).rejects.toBeInstanceOf(PermissionError);
+    await expect(PushService.push(db, 'http://server/api', 'token')).resolves.toMatchObject({
+        status: 'partial',
+        synced: 0,
+        issues: [{ documentId: 'draft', message: 'Немає доступу до цього складу' }],
+    });
     expect(DocumentRepository.deleteOutbox).not.toHaveBeenCalled();
 });
 it('removes an entry only after its own client id is accepted', async () => {
@@ -48,12 +55,17 @@ it('removes an entry only after its own client id is accepted', async () => {
         status: 200,
         json: async () => ({ results: [{ client_id: 'draft', status: 'accepted' }] }),
     } as Response);
-    await expect(PushService.push(db, 'http://server/api', 'token')).resolves.toEqual({ status: 'ok', synced: 1 });
+    await expect(PushService.push(db, 'http://server/api', 'token')).resolves.toEqual({
+        status: 'ok',
+        synced: 1,
+    });
     expect(DocumentRepository.deleteOutbox).toHaveBeenCalledWith(db, 'draft');
 });
 it('never sends an unresolved local product id as a server product id', async () => {
     jest.mocked(ProductRepository.serverIdMap).mockResolvedValue(new Map());
-    await expect(PushService.push(db, 'http://server/api', 'token')).rejects.toThrow('зіставлений');
+    const result = await PushService.push(db, 'http://server/api', 'token');
+    expect(result.status).toBe('partial');
+    if (result.status === 'partial') expect(result.issues[0].message).toContain('зіставлений');
     expect(apiRequest).not.toHaveBeenCalled();
     expect(DocumentRepository.deleteOutbox).not.toHaveBeenCalled();
 });
