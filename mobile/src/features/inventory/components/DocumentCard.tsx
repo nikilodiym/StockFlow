@@ -1,10 +1,10 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
-import s from '../../../constants/styles';
+import { useAppStyles } from '../../../constants/styles';
 import { colors } from '../../../constants/colors';
 import Icon from '../../../components/ui/Icon';
 import { dateLabel } from '../../../utils/formatters';
-import { documentIcon, shortId, statusLabel, TYPE_LABEL } from '../services/DocumentService';
+import { documentIcon, documentLabel, statusLabel, TYPE_LABEL } from '../services/DocumentService';
 import type { SavedDocument } from '../types/document.types';
 
 type Props = {
@@ -17,16 +17,37 @@ type Props = {
 
 /** Saved document row: icon, short id, type, date, status. */
 export default function DocumentCard({ doc, warehouse, onPress, coloredStatus }: Props) {
+    const s = useAppStyles();
+
     return (
         <Pressable style={s.savedDocCard} onPress={() => onPress(doc)}>
-            <View style={s.docGlyph}><Icon name={documentIcon(doc.type)} size={18} color={colors.primary} /></View>
-            <View style={s.productInfo}>
-                <Text style={s.productName}>{shortId(doc.id)} · {TYPE_LABEL[doc.type]}</Text>
-                <Text style={s.productCode}>{dateLabel(doc.created_at)} · {warehouse}</Text>
+            <View style={s.docGlyph}>
+                <Icon name={documentIcon(doc.type)} size={24} color={colors.primary} />
             </View>
-            {coloredStatus
-                ? <Text style={[s.statusPill, doc.status === 'posted' ? s.statusDone : s.statusPending]}>{statusLabel(doc)}</Text>
-                : <Text style={s.statusPill}>{doc.status === 'draft' ? 'Чернетка' : doc.status}</Text>}
+            <View style={s.productInfo}>
+                <Text style={s.productName}>
+                    {documentLabel(doc)} {TYPE_LABEL[doc.type]}
+                </Text>
+                <Text style={s.productCode}>
+                    {dateLabel(doc.created_at)} · {warehouse}
+                </Text>
+            </View>
+            <Text
+                style={[
+                    s.statusPill,
+                    doc.status === 'conflict'
+                        ? s.statusError
+                        : doc.status === 'draft'
+                          ? undefined
+                          : doc.is_synced
+                            ? s.statusDone
+                            : s.statusPending,
+                ]}
+            >
+                {doc.is_synced && doc.status !== 'draft' && doc.status !== 'conflict'
+                    ? 'Синхронізовано'
+                    : statusLabel(doc)}
+            </Text>
         </Pressable>
     );
 }

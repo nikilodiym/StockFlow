@@ -4,6 +4,7 @@ import { apiRequest, readJson } from '../../../services/api/client';
 import { ENDPOINTS } from '../../../services/api/endpoints';
 import { findServer, serverCandidates } from '../../../services/api/server';
 import type { LoginResponse, Session, UserData } from '../types/auth.types';
+import { LoginError } from '../utils/loginErrors';
 
 export type LoginResult = Session & { serverUrl: string };
 
@@ -12,8 +13,8 @@ export const displayName = (user: UserData | null | undefined, fallback: string 
     user?.name || user?.username || user?.email || fallback;
 
 /** Turns the login response into a session or throws a readable error. */
-export function parseLoginResponse(ok: boolean, status: number, data: LoginResponse): Session {
-    if (!ok) throw new Error(data.detail || data.message || data.error || `Помилка входу: ${status}`);
+export function parseLoginResponse(ok: boolean, status: number, data: LoginResponse, serverUrl?: string): Session {
+    if (!ok) throw new LoginError(data.detail || data.message || data.error || `Помилка входу: ${status}`, status, serverUrl);
     const token = data.access || data.tokens?.access;
     if (!token) throw new Error('Сервер не повернув токен доступу. Перевірте формат відповіді API.');
     return { token, refresh: data.refresh || data.tokens?.refresh || null, user: data.user || data.profile || null };
@@ -38,7 +39,7 @@ export const AuthService = {
             base = found;
             response = await request(found);
         }
-        const session = parseLoginResponse(response.ok, response.status, await readJson<LoginResponse>(response));
+        const session = parseLoginResponse(response.ok, response.status, await readJson<LoginResponse>(response), base);
         return { ...session, serverUrl: base };
     },
 

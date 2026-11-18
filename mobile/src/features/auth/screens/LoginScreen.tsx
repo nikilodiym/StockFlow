@@ -2,10 +2,10 @@ import React from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import s from '../../../constants/styles';
+import { useAppStyles } from '../../../constants/styles';
 import { colors } from '../../../constants/colors';
 import Button from '../../../components/ui/Button';
-import Icon from '../../../components/ui/Icon';
+import Logo from '../../../components/ui/Logo';
 import Input from '../../../components/ui/Input';
 import { useSettings } from '../../../app/providers/SettingsProvider';
 import { useWarehousePicker } from '../../settings/hooks/useWarehousePicker';
@@ -15,6 +15,8 @@ import { useLogin } from '../hooks/useLogin';
 
 /** Login: warehouse, then PIN or email + password. */
 export default function LoginScreen() {
+    const s = useAppStyles();
+
     const { warehouse } = useSettings();
     const pickWarehouse = useWarehousePicker();
     const login = useLogin();
@@ -22,12 +24,20 @@ export default function LoginScreen() {
     return (
         <SafeAreaView style={s.root} edges={['top', 'bottom']}>
             <StatusBar style="dark" />
-            <ScrollView contentContainerStyle={s.loginScreen} keyboardShouldPersistTaps="handled">
-                <View style={s.logoCube}><Icon name="warehouse" size={25} color={colors.primary} strokeWidth={2.2} /></View>
-                <Text style={s.loginBrand}>Ware<Text style={s.brandGreen}>Go</Text></Text>
+            <ScrollView
+                style={{ width: '100%', maxWidth: 720, alignSelf: 'center' }}
+                contentContainerStyle={s.loginScreen}
+                keyboardShouldPersistTaps="handled"
+            >
+                <View style={s.logoCube}>
+                    <Logo />
+                </View>
+                <Text style={s.loginBrand}>
+                    Ware<Text style={s.brandGreen}>Go</Text>
+                </Text>
                 <Text style={s.loginSubtitle}>Складський облік</Text>
 
-                <Text style={s.fieldLabel}>СКЛАД</Text>
+                <Text style={s.fieldLabel}>Склад</Text>
                 <Pressable style={s.warehousePicker} onPress={pickWarehouse}>
                     <Text style={s.warehouseText}>{warehouse}</Text>
                     <Text style={s.chevron}>⌄</Text>
@@ -37,10 +47,31 @@ export default function LoginScreen() {
 
                 {login.mode === 'email' ? (
                     <>
-                        <Input label="EMAIL" placeholder="name@warego.ua" autoCapitalize="none" autoCorrect={false} keyboardType="email-address" value={login.email} onChangeText={login.setEmail} />
-                        <Input label="ПАРОЛЬ" secureTextEntry placeholder="Введіть пароль" value={login.password} onChangeText={login.setPassword} onSubmitEditing={() => void login.submitEmail()} />
-                        <Button label={login.submitting ? 'Вхід…' : 'Увійти'} disabled={login.submitting} onPress={() => void login.submitEmail()} />
-                        <Pressable onPress={login.forgotPassword}><Text style={s.forgotLink}>Забули пароль?</Text></Pressable>
+                        <Input
+                            label="EMAIL"
+                            placeholder="name@warego.ua"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            keyboardType="email-address"
+                            value={login.email}
+                            onChangeText={login.setEmail}
+                        />
+                        <Input
+                            label="ПАРОЛЬ"
+                            secureTextEntry
+                            placeholder="Введіть пароль"
+                            value={login.password}
+                            onChangeText={login.setPassword}
+                            onSubmitEditing={() => void login.submitEmail()}
+                        />
+                        <Button
+                            label={login.submitting ? 'Вхід…' : 'Увійти'}
+                            disabled={login.submitting}
+                            onPress={() => void login.submitEmail()}
+                        />
+                        <Pressable onPress={login.forgotPassword}>
+                            <Text style={s.forgotLink}>Забули пароль?</Text>
+                        </Pressable>
                     </>
                 ) : (
                     <>

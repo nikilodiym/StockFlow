@@ -70,6 +70,17 @@ class User(AbstractBaseUser, PermissionsMixin):
     def get_short_name(self):
         return (self.full_name or self.email).split(" ")[0]
 
+    def has_perm(self, perm, obj=None):
+        # StockFlow's global administrator must also have Django model permissions.
+        if self.is_active and self.is_staff:
+            return True
+        return super().has_perm(perm, obj)
+
+    def has_module_perms(self, app_label):
+        if self.is_active and self.is_staff:
+            return True
+        return super().has_module_perms(app_label)
+
     # --- PIN -----------------------------------------------------------------
     @property
     def has_pin(self):

@@ -1,4 +1,12 @@
-import { filterProducts, matchProduct, parseProductsCsv, productsToCsv } from '../services/ProductService';
+import {
+    filterProducts,
+    matchProduct,
+    parseProductsCsv,
+    productsToCsv,
+    ProductService,
+} from '../services/ProductService';
+import { ProductRepository } from '../repositories/ProductRepository';
+import type { SQLiteDatabase } from 'expo-sqlite';
 import type { Product } from '../types/product.types';
 
 const products: Product[] = [
@@ -15,15 +23,28 @@ describe('matchProduct', () => {
 
 describe('filterProducts', () => {
     it('filters by name, SKU or barcode', () => {
-        expect(filterProducts(products, 'FOO').map(p => p.id)).toEqual([2]);
-        expect(filterProducts(products, '0017').map(p => p.id)).toEqual([1]);
+        expect(filterProducts(products, 'FOO').map((p) => p.id)).toEqual([2]);
+        expect(filterProducts(products, '0017').map((p) => p.id)).toEqual([1]);
         expect(filterProducts(products, '')).toHaveLength(2);
+    });
+});
+
+describe('barcode lookup', () => {
+    it('does not treat an SKU or a number in a name as a matching barcode', async () => {
+        const lookup = jest.spyOn(ProductRepository, 'findByBarcode').mockResolvedValue(null);
+        const db = {} as SQLiteDatabase;
+        await expect(ProductService.findByBarcode(db, products, 'DRK-001')).resolves.toBeNull();
+        expect(lookup).toHaveBeenCalledWith(db, 'DRK-001');
+        await expect(ProductService.findByBarcode(db, products, products[0].barcode)).resolves.toEqual(products[0]);
+        lookup.mockRestore();
     });
 });
 
 describe('CSV', () => {
     it('parses rows, skips header and rows without SKU or name', () => {
-        const rows = parseProductsCsv('SKU,Barcode,Name,Unit,Stock\nA-1,111,"Товар",кг,2.5\n,222,Без SKU,шт,1\nB-2,,Без коду,,\n');
+        const rows = parseProductsCsv(
+            'SKU,Barcode,Name,Unit,Stock\nA-1,111,"Товар",кг,2.5\n,222,Без SKU,шт,1\nB-2,,Без коду,,\n',
+        );
         expect(rows).toEqual([
             { sku: 'A-1', barcode: '111', name: 'Товар', unit: 'кг', stock: 2.5 },
             { sku: 'B-2', barcode: '', name: 'Без коду', unit: 'шт', stock: 0 },
@@ -32,6 +53,9 @@ describe('CSV', () => {
 
     it('exports with a header and quoted names', () => {
         const csv = productsToCsv([{ ...products[0], name: 'Вода "Моршинська"' }]);
-        expect(csv.split('\n')).toEqual(['SKU,Barcode,Name,Unit,Stock', 'DRK-001,4820000000017,"Вода ""Моршинська""",шт,128']);
+        expect(csv.split('\n')).toEqual([
+            'SKU,Barcode,Name,Unit,Stock',
+            'DRK-001,4820000000017,"Вода ""Моршинська""",шт,128',
+        ]);
     });
 });

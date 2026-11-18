@@ -47,6 +47,17 @@ class TestProductApi:
     def test_worker_cannot_change_catalog(self, client_for, worker, units):
         assert client_for(worker).post("/api/products/", {"sku": "X", "name": "X"}, format="json").status_code == 403
 
+    def test_new_scanned_product_can_be_found_and_added_to_a_receipt(self, client_for, admin, warehouse, units):
+        client = client_for(admin)
+        created = client.post('/api/products/', {'sku': 'NEW-SCAN', 'name': 'Новий товар', 'barcode': '4821234567890', 'unit': 'шт'}, format='json')
+        assert created.status_code == 201, created.data
+        lookup = client.get('/api/products/by-barcode/?code=4821234567890')
+        assert lookup.status_code == 200
+        assert lookup.data['product']['id'] == created.data['id']
+        receipt = client.post('/api/documents/', {'type': 'receipt', 'warehouse': warehouse.pk, 'lines': [{'product': created.data['id'], 'quantity': 2, 'unit': 'шт'}]}, format='json')
+        assert receipt.status_code == 201, receipt.data
+        assert receipt.data['lines'][0]['product'] == created.data['id']
+
     def test_delete_only_deactivates(self, client_for, admin, make_product):
         product = make_product()
         assert client_for(admin).delete(f"/api/products/{product.pk}/").status_code == 204

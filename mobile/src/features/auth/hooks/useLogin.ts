@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useAuth } from '../../../app/providers/AuthProvider';
 import { useDialog } from '../../../app/providers/DialogProvider';
 import { useSettings } from '../../../app/providers/SettingsProvider';
-import { getErrorMessage } from '../../../utils/formatters';
+import { formatLoginError } from '../utils/loginErrors';
 import type { AuthMode } from '../types/auth.types';
 
 export function useLogin() {
@@ -26,10 +26,7 @@ export function useLogin() {
             await signIn(email, password);
             setPassword('');
         } catch (error) {
-            const server = (error as { serverUrl?: string }).serverUrl ?? serverUrl;
-            showDialog('Не вдалося увійти',
-                `${getErrorMessage(error)}\n\nСервер: ${server}\nПеревірте, що на комп’ютері запущені база (docker compose up -d db) і API (npm run api), а телефон у тій самій Wi-Fi мережі. Адресу можна змінити в Налаштуваннях.`,
-                undefined, 'error');
+            showDialog('Не вдалося увійти', formatLoginError(error, serverUrl), undefined, 'error');
         } finally {
             setSubmitting(false);
         }

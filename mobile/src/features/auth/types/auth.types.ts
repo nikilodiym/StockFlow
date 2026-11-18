@@ -3,6 +3,9 @@ export type UserData = {
     name?: string;
     username?: string;
     email?: string;
+    is_staff?: boolean;
+    is_active?: boolean;
+    memberships?: { warehouse: number; warehouse_name?: string; role: 'worker' | 'manager'; is_default?: boolean }[];
 };
 
 /** POST /api/auth/login/ response (older field names kept for compatibility). */
