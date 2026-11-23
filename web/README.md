@@ -14,11 +14,50 @@
 
 Зміни у preview зберігаються тільки в sessionStorage поточної вкладки та не впливають на серверні дані. Для чистого перегляду відкрийте адресу в новій вкладці.
 
+## Архітектура
+
+**Feature-based + розділення відповідальностей** — як у мобільному застосунку й модулях бекенду.
+
+```
+src/
+├── main.jsx                  точка входу
+├── app/                      каркас
+│   ├── App.jsx               вхід → layout → сторінка за #адресою
+│   ├── routes.js             сторінки: адреса, пункт меню, заголовок, компонент, доступ
+│   ├── layout/               AppLayout, Sidebar, Topbar, GlobalSearch, ProfileMenu
+│   ├── state/                AdminProvider (контекст) + хуки: useAdminData (дані й mutate),
+│   │                         useNavigation, useFilters, useModal, useToast, preview
+│   └── modals/               ModalFrame (рамка), ModalHost, registry (тип → компонент),
+│                             useModalAction, FormFooter, DeleteModal
+├── features/                 функціональні модулі
+│   ├── auth/                 LoginPage, LogoutModal, api (login/logout)
+│   ├── dashboard/            DashboardPage, Charts
+│   ├── reports/              ReportsPage
+│   ├── catalog/              CatalogPage, Product/Category/Unit/Import модалки, api, model
+│   ├── documents/            DocumentsPage, DocumentDrawer (конфлікти), api, model
+│   ├── users/                UsersPage, User/Password/Created/Block модалки, model
+│   ├── warehouses/           WarehousesPage, WarehouseModal, model
+│   ├── sync/                 SyncEvents, SyncModal, model
+│   └── notifications/        NotificationsMenu, NotificationModal, api
+│       у фічі: pages/ components/ modals/ api.js (запити) model.js (чисті функції)
+├── shared/                   спільне
+│   ├── api/                  client (fetch, JWT, refresh, пагінація), resources (список колекцій)
+│   ├── lib/                  format, roles, dictionaries, csv
+│   ├── ui/                   Button, Table, Select, Tabs… , ReferenceIcon, icons/
+│   └── styles.css
+└── mocks/                    демо-дані й імпорт для режиму preview (окремо від робочого коду)
+```
+
+- Сторінки й модалки беруть стан через `useAdmin()` (контекст), а не через один пропс.
+- Нова модалка: компонент у `features/<фіча>/modals/` + рядок у `app/modals/registry.js`; відкриття — `open("<тип>", item, значенняФорми)`.
+- Нова сторінка: компонент у `features/<фіча>/pages/` + рядок у `app/routes.js` (меню й заголовок підхопляться самі).
+- Запити до сервера — у `features/<фіча>/api.js` або `shared/api`; компоненти не викликають `fetch` напряму.
+
 ## Реалізовано
 
 Вхід і помилка входу; дашборд; товари, категорії та одиниці виміру; документи й фільтри; акаунти, матриця прав та вигляд запитів на відновлення; склади; аналітика; форми створення й редагування; імпорт та експорт CSV; підтвердження видалення, блокування та виходу; створений акаунт; панелі деталей документа, конфлікту та журналу синхронізацій; сповіщення; вигляд менеджера. Таблиці, пошук, пагінація, вибір складу та модальні вікна працюють. На вузьких екранах доступне згорнуте меню та прокручування таблиць.
 
-Серверні операції використовують наявні endpoints products, categories, units, barcodes, imports, documents, warehouses, users, stocks, notifications та sync. JWT оновлюється через refresh; паралельні запити використовують один refresh. Списки завантажуються з урахуванням усіх сторінок API. Помилки збереження залишають форму відкритою.
+Серверні операції використовують наявні endpoints products, categories, units, barcodes, imports, documents, warehouses, users, stock, notifications та sync. JWT оновлюється через refresh; паралельні запити використовують один refresh. Списки завантажуються з урахуванням усіх сторінок API. Помилки збереження залишають форму відкритою.
 
 ## Межі поточного API
 

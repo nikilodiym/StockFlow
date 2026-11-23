@@ -1,6 +1,7 @@
 import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { request, getAll, clearSession, exportCSV } from "../src/api.js";
+import { request, getAll, clearSession } from "../src/shared/api/client.js";
+import { exportCSV } from "../src/shared/lib/csv.js";
 
 const storage = new Map();
 globalThis.localStorage = {

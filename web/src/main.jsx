@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import App from "./AdminApp.jsx";
-import "./style.css";
+import App from "./app/App.jsx";
+import "./shared/styles.css";
 
 createRoot(document.getElementById("root")).render(<App />);
