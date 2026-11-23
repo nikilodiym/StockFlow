@@ -18,18 +18,19 @@ export const SyncService = {
     async run(db: SQLiteDatabase, serverUrl: string, token: string): Promise<SyncResult> {
         // Resolve local product ids before sending lines. Only the catalog is
         // pulled here; queued document quantities are never overwritten.
+        let preparedProducts = 0;
         try {
-            await PullService.pull(db, serverUrl, token);
+            preparedProducts = await PullService.pull(db, serverUrl, token);
         } catch {
             /* Push preserves unresolved lines in the outbox. */
         }
         const push = await PushService.push(db, serverUrl, token);
         if (push.status === 'unauthorized') return { push, pulled: null };
         try {
-            return { push, pulled: await PullService.pull(db, serverUrl, token) };
+            return { push, pulled: preparedProducts + await PullService.pull(db, serverUrl, token) };
         } catch (error) {
             // The catalog pull is best-effort: documents were already delivered.
-            return { push, pulled: null, pullError: getErrorMessage(error) };
+            return { push, pulled: preparedProducts || null, pullError: getErrorMessage(error) };
         }
     },
 };
