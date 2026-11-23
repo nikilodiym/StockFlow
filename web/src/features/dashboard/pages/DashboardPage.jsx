@@ -7,6 +7,16 @@ import { firstConflict } from "../../documents/model";
 import SyncEvents from "../../sync/components/SyncEvents";
 import { PREVIEW_CATEGORY_STOCK } from "../../warehouses/model";
 import { CategoryChart, ScanChart } from "../components/Charts";
+import useDashboardStats from "../hooks/useDashboardStats";
+import {
+  daySeries,
+  hourSeries,
+  previewScanSeries,
+  previewWorkerRows,
+  queueTotal,
+  scanTotals,
+  workerRows,
+} from "../model";
 
 /** Dashboard; with `reports` it is the "Аналітика та звіти" page. */
 export default function DashboardPage({ reports = false }) {
@@ -14,25 +24,25 @@ export default function DashboardPage({ reports = false }) {
   const selected = data.warehouses.find((w) => String(w.id) === warehouse),
     total = data.products.reduce((sum, p) => sum + Number(p.stock), 0),
     low = data.products.filter((p) => Number(p.stock) <= Number(p.min_stock));
+  const scans = useDashboardStats({ preview, warehouse, version: data.documents }),
+    scanSeries = preview
+      ? previewScanSeries(!admin)
+      : scans.stats && { today: hourSeries(scans.stats.hours), week: daySeries(scans.stats.days) },
+    scanTotal = scanTotals(scans.stats);
   const active = preview
-    ? data.users
-        .filter((u) => [5, 7, 9, 6].includes(u.id))
-        .sort((x, y) => [5, 7, 9, 6].indexOf(x.id) - [5, 7, 9, 6].indexOf(y.id))
-        .filter((u) => !warehouse || String(u.warehouse) === warehouse)
-    : data.users.filter((u) =>
-        (data.devices || []).some(
-          (d) =>
-            d.user === u.id &&
-            d.last_seen_at &&
-            Date.now() - new Date(d.last_seen_at).getTime() < 900000,
-        ),
-      );
+      ? previewWorkerRows(data.users, warehouse)
+      : workerRows(scans.stats?.workers),
+    queue = queueTotal(scans.stats?.workers);
   const metrics = reports
     ? [
         [
-          preview ? 3456 : "—",
+          preview ? 3456 : (scanTotal?.week ?? "—"),
           "Сканів за 7 днів",
-          preview ? "У середньому 494 на день" : "Немає статистики сканувань",
+          preview
+            ? "У середньому 494 на день"
+            : scanTotal
+              ? `У середньому ${fmt(scanTotal.average)} на день`
+              : "Немає статистики сканувань",
           "",
         ],
         [
@@ -71,9 +81,13 @@ export default function DashboardPage({ reports = false }) {
           "",
         ],
         [
-          preview ? (warehouse ? 148 : 174) : "—",
+          preview ? (warehouse ? 148 : 174) : (scanTotal?.today ?? "—"),
           "Сканів сьогодні",
-          preview ? "Зміна 08:00–20:00" : "Немає статистики сканувань",
+          preview
+            ? "Зміна 08:00–20:00"
+            : scanTotal
+              ? "За даними сервера"
+              : "Немає статистики сканувань",
           "",
         ],
         [
@@ -96,13 +110,17 @@ export default function DashboardPage({ reports = false }) {
           "",
         ],
         [
-          preview ? (warehouse ? 26 : 28) : "—",
+          preview ? (warehouse ? 26 : 28) : (queue?.pending ?? "—"),
           "Не синхронізовано",
           preview
             ? warehouse
               ? "записів на 1 пристрої"
               : "записів на 2 пристроях"
-            : "Немає звіту про чергу",
+            : !queue
+              ? "Немає звіту про чергу"
+              : queue.pending
+                ? `документів у черзі · комірників: ${queue.workers}`
+                : "Усе синхронізовано",
           "amber",
         ],
         [
@@ -128,7 +146,12 @@ export default function DashboardPage({ reports = false }) {
       />
     ),
     scanChart = (
-      <ScanChart preview={preview} reports={reports} manager={!admin} />
+      <ScanChart
+        series={scanSeries}
+        reports={reports}
+        loading={scans.loading}
+        error={scans.error}
+      />
     );
   return (
     <>
@@ -192,54 +215,47 @@ export default function DashboardPage({ reports = false }) {
             <section className="panel workers-panel">
               <div className="list-heading">
                 <h2>Активні комірники</h2>
-                <small>
-                  {preview
-                    ? `${active.filter((u) => u.id !== 6).length} онлайн`
-                    : `${active.length} онлайн`}
-                </small>
+                <small>{active.filter((u) => u.online).length} онлайн</small>
               </div>
               {active.length ? (
-                active.map((u, i) => (
+                active.map((u) => (
                   <div className="worker-row" key={u.id}>
                     <Tile>{initials(u.name)}</Tile>
                     <span className="worker-name">
                       {u.name}
-                      <small>
-                        Склад №{u.warehouse || u.memberships?.[0]?.warehouse} ·{" "}
-                        {u.code || u.id}
-                      </small>
+                      <small>{u.subtitle}</small>
                     </span>
                     <span className="online">
-                      <i className={u.id === 6 && preview ? "gray" : ""} />
-                      {u.id === 6 && preview ? "Зміна з 14:00" : "Онлайн"}
+                      <i className={u.online ? "" : "gray"} />
+                      {u.status}
                     </span>
                     <span>
-                      {preview
-                        ? { 5: 148, 7: 14, 9: 12, 6: 0 }[u.id] || 0
-                        : "—"}
+                      {fmt(u.scans)}
                       <small>Сканів</small>
                     </span>
                     <span>
-                      {preview ? { 5: 26, 7: 2 }[u.id] || 0 : "—"}
+                      {fmt(u.pending)}
                       <small>у черзі</small>
                     </span>
                     <span>
-                      {preview
-                        ? { 5: "09:12", 7: "09:12", 9: "10:02", 6: "19:48" }[
-                            u.id
-                          ]
-                        : "—"}
-                      <small>{preview ? "22.10" : ""}</small>
+                      {u.time}
+                      <small>{u.date}</small>
                     </span>
                   </div>
                 ))
               ) : (
-                <Empty>Немає активних комірників.</Empty>
+                <Empty>
+                  {scans.error
+                    ? `Не вдалося завантажити комірників: ${scans.error}`
+                    : scans.loading
+                      ? "Завантаження…"
+                      : "Сьогодні ще ніхто не працював."}
+                </Empty>
               )}
             </section>
             <section className="panel">
               <div className="list-heading">
-                <h2>Активні комірники</h2>
+                <h2>Синхронізації</h2>
                 <button className="text-button" onClick={() => open("sync")}>
                   Усі
                 </button>

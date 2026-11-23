@@ -262,3 +262,15 @@ def test_push_receive_confirms_transfer(client_for, admin, make_user, warehouse,
     assert push(client, [item("receive", transfer.pk)]).data["results"][0]["result"] == "applied"
     assert stock_of(product, warehouse2) == 2
     assert push(client, [item("receive", transfer.pk)]).data["results"][0]["result"] == "duplicate"
+
+
+def test_pull_records_device_and_queue_size(client_for, worker):
+    from accounts.models import Device
+
+    response = client_for(worker).get("/api/v1/sync/pull/", {"device_id": "android", "pending": 3, "platform": "android"})
+    assert response.status_code == 200
+    device = Device.objects.get(user=worker)
+    assert device.pending_count == 3 and device.platform == "android" and device.last_seen_at is not None
+    client_for(worker).get("/api/v1/sync/pull/", {"device_id": "android", "pending": 0})
+    assert Device.objects.get(user=worker).pending_count == 0  # same phone, same row
+    assert client_for(worker).get("/api/v1/sync/pull/", {"device_id": "android", "pending": -1}).status_code == 400

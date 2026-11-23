@@ -146,6 +146,7 @@ class DeviceStateSerializer(serializers.Serializer):
     push_token = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=255)
     battery_level = serializers.IntegerField(required=False, allow_null=True, min_value=0, max_value=100)
     is_charging = serializers.BooleanField(required=False)
+    pending_count = serializers.IntegerField(required=False, allow_null=True, min_value=0)
 
 
 class DeviceSerializer(serializers.ModelSerializer):
@@ -155,7 +156,7 @@ class DeviceSerializer(serializers.ModelSerializer):
         model = Device
         fields = [
             "id", "user", "user_email", "name", "model", "platform", "os_version", "app_version", "battery_level",
-            "is_charging", "last_seen_at", "last_sync_at", "is_blocked", "created_at",
+            "is_charging", "pending_count", "last_seen_at", "last_sync_at", "is_blocked", "created_at",
         ]
         read_only_fields = [f for f in fields if f != "is_blocked"]
 

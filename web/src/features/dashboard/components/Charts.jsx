@@ -48,42 +48,26 @@ export function CategoryChart({ categories, warehouse, reports }) {
     </section>
   );
 }
-export function ScanChart({ preview, reports, manager = false }) {
+/**
+ * Scans per hour today / per day for 7 days. `series` = { today, week } from model.js
+ * (demo series in preview mode); `loading` / `error` replace the chart while there is no data.
+ */
+export function ScanChart({ series, reports, loading = false, error = "" }) {
   const [view, setView] = useState("chart"),
     [period, setPeriod] = useState("today");
   const week = reports || period === "week",
-    values = week
-      ? [790, 0, 0, 750, 805, 908, 174]
-      : [
-          manager ? 38 : 44,
-          manager ? 64 : 75,
-          manager ? 46 : 54,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-        ],
-    labels = week
-      ? ["16.10", "17.10", "18.10", "19.10", "20.10", "21.10", "22.10"]
-      : [
-          "08",
-          "09",
-          "10",
-          "11",
-          "12",
-          "13",
-          "14",
-          "15",
-          "16",
-          "17",
-          "18",
-          "19",
-        ];
+    current = series?.[week ? "week" : "today"],
+    values = current?.values || [],
+    labels = current?.labels || [];
+  const status = error
+    ? `Не вдалося завантажити статистику сканувань: ${error}`
+    : loading && !current
+      ? "Завантаження статистики…"
+      : !values.some((n) => n > 0)
+        ? week
+          ? "За останні 7 днів сканувань немає."
+          : "Сьогодні ще немає сканувань."
+        : "";
   return (
     <section className="panel chart-panel">
       <div className="panel-heading">
@@ -91,7 +75,7 @@ export function ScanChart({ preview, reports, manager = false }) {
           <h2>Динаміка сканування</h2>
           <small>
             {reports
-              ? "Останні 7 днів, 22.10 ще триває"
+              ? `Останні 7 днів, ${labels.at(-1) || "сьогодні"} ще триває`
               : week
                 ? "За останні 7 днів"
                 : "Сьогодні за годинами"}
@@ -118,25 +102,26 @@ export function ScanChart({ preview, reports, manager = false }) {
           />
         </div>
       </div>
-      {!preview ? (
-        <Empty>Сервер поки не надає погодинну статистику сканувань.</Empty>
+      {status ? (
+        <Empty>{status}</Empty>
       ) : view === "chart" ? (
         <div className="scan-chart">
           <div className="y-axis">
-            <span>{week ? "1 000" : "80"}</span>
-            <span>{week ? "500" : "40"}</span>
+            <span>{current.ticks[0]}</span>
+            <span>{current.ticks[1]}</span>
             <span>0</span>
           </div>
           <div className="plot">
             {values.map((n, i) => (
-              <div className="scan-column" key={i}>
+              <div className="scan-column" key={labels[i]}>
                 <div className="column-space">
                   {n > 0 ? (
                     <div
-                      className={`column ${i === (week ? 6 : 2) ? "green" : ""}`}
-                      style={{ height: `${(n / (week ? 1000 : 85)) * 100}%` }}
+                      className={`column ${i === current.highlight ? "green" : ""}`}
+                      style={{ height: `${(n / current.scale) * 100}%` }}
+                      title={`${labels[i]}: ${fmt(n)}`}
                     >
-                      <b>{n}</b>
+                      <b>{fmt(n)}</b>
                     </div>
                   ) : (
                     <div className="zero">—</div>
@@ -150,9 +135,9 @@ export function ScanChart({ preview, reports, manager = false }) {
       ) : (
         <Table headers={["Період", "Сканувань"]}>
           {values.map((n, i) => (
-            <tr key={i}>
+            <tr key={labels[i]}>
               <td>{labels[i]}</td>
-              <td>{n || "—"}</td>
+              <td>{n ? fmt(n) : "—"}</td>
             </tr>
           ))}
         </Table>

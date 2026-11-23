@@ -154,12 +154,15 @@ class Device(models.Model):
     push_token = models.CharField(max_length=255, blank=True, null=True)
     battery_level = models.PositiveSmallIntegerField(blank=True, null=True)
     is_charging = models.BooleanField(default=False)
+    pending_count = models.PositiveIntegerField(
+        blank=True, null=True, help_text="Documents waiting in the phone's outbox (reported on sync)"
+    )
     last_seen_at = models.DateTimeField(blank=True, null=True)
     last_sync_at = models.DateTimeField(blank=True, null=True)
     is_blocked = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    STATE_FIELDS = ("name", "model", "platform", "os_version", "app_version", "push_token", "battery_level", "is_charging")
+    STATE_FIELDS = ("name", "model", "platform", "os_version", "app_version", "push_token", "battery_level", "is_charging", "pending_count")
 
     class Meta:
         db_table = "devices"

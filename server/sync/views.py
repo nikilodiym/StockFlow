@@ -5,6 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.serializers import DeviceStateSerializer
 from core.permissions import warehouse_ids
 
 from . import services
@@ -29,16 +30,22 @@ class SyncPullView(APIView):
     """Server → phone: everything changed since `cursor`, including new notifications."""
 
     @extend_schema(
-        parameters=[OpenApiParameter("cursor", str, description="ISO time from the previous pull"),
-                    OpenApiParameter("device_id", str)],
+        parameters=[
+            OpenApiParameter("cursor", str, description="ISO time from the previous pull"),
+            OpenApiParameter("device_id", str, description="UUID or a short key such as 'android'"),
+            OpenApiParameter("pending", int, description="Documents still waiting in the phone's outbox"),
+            OpenApiParameter("battery_level", int),
+        ],
         responses={200: dict},
     )
     def get(self, request):
         device_id = request.query_params.get("device_id")
-        device_id = services._as_uuid(device_id) if device_id else None
-        state = {k: request.query_params[k] for k in ("app_version", "platform") if k in request.query_params}
-        if "battery_level" in request.query_params:
-            state["battery_level"] = int(request.query_params["battery_level"])
+        device_id = services.device_uuid(request.user, device_id) if device_id else None
+        state = DeviceStateSerializer(data={
+            key: request.query_params[key] for key in ("app_version", "platform", "battery_level") if key in request.query_params
+        } | ({"pending_count": request.query_params["pending"]} if "pending" in request.query_params else {}))
+        state.is_valid(raise_exception=True)
+        state = state.validated_data
         return Response(services.build_pull(request.user, request.query_params.get("cursor"), device_id, state))
 
 

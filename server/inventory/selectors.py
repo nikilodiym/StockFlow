@@ -6,7 +6,8 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
-from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum, Value
+from django.contrib.auth import get_user_model
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, Max, Q, Sum, Value
 from django.db.models.functions import Coalesce, ExtractHour, TruncDate
 from django.utils import timezone
 
@@ -49,21 +50,77 @@ def incoming_transfers(warehouse_ids=None):
     return queryset if warehouse_ids is None else queryset.filter(destination_warehouse_id__in=warehouse_ids)
 
 
-def scans_by_hour(warehouse_ids=None, day=None, user=None):
-    """
-    Scanned lines per hour of a day (Profile chart). A line counts at its scan time
-    (sent by the phone) or, if missing, at the document's creation time.
-    """
-    day = day or timezone.localdate()
+def _scanned_lines(warehouse_ids=None, user=None):
+    """Document lines with `at` = scan time (sent by the phone) or, if missing, the document's creation time."""
     lines = DocumentLine.objects.filter(document__is_deleted=False).annotate(
         at=Coalesce("scanned_at", "document__client_created_at", "document__created_at")
-    ).filter(at__date=day)
+    )
     if warehouse_ids is not None:
         lines = lines.filter(document__warehouse_id__in=warehouse_ids)
     if user is not None:
         lines = lines.filter(document__created_by=user)
+    return lines
+
+
+def scans_by_hour(warehouse_ids=None, day=None, user=None):
+    """Scanned lines per hour of a day (dashboard and Profile charts)."""
+    day = day or timezone.localdate()
+    lines = _scanned_lines(warehouse_ids, user).filter(at__date=day)
     counts = {row["hour"]: row["n"] for row in lines.annotate(hour=ExtractHour("at")).values("hour").annotate(n=Count("id"))}
     return [{"hour": hour, "scans": counts.get(hour, 0)} for hour in range(24)]
+
+
+def scans_by_day(warehouse_ids=None, days=7, end=None, user=None):
+    """Scanned lines per day for the `days` days ending with `end` (today by default), oldest first."""
+    end = end or timezone.localdate()
+    start = end - timedelta(days=days - 1)
+    lines = _scanned_lines(warehouse_ids, user).filter(at__date__gte=start, at__date__lte=end)
+    counts = {row["day"]: row["n"] for row in lines.annotate(day=TruncDate("at")).values("day").annotate(n=Count("id"))}
+    return [{"date": start + timedelta(days=i), "scans": counts.get(start + timedelta(days=i), 0)} for i in range(days)]
+
+
+def worker_activity(warehouse_ids=None, day=None):
+    """
+    People who worked today on the given warehouses: scans of the day, documents still queued
+    on their phones (as last reported), last activity and whether a phone is online right now.
+    Online people first, then by scans.
+    """
+    day = day or timezone.localdate()
+    online_since = timezone.now() - timedelta(minutes=settings.ACTIVE_DEVICE_MINUTES)
+    scans = {
+        row["document__created_by"]: row
+        for row in _scanned_lines(warehouse_ids).filter(at__date=day)
+        .values("document__created_by").annotate(n=Count("id"), last=Max("at"))
+    }
+    devices = Device.objects.filter(user__isnull=False, user__is_active=True, last_seen_at__date=day)
+    if warehouse_ids is not None:
+        devices = devices.filter(user__memberships__warehouse_id__in=warehouse_ids).distinct()
+    phones = {}
+    for device in devices:
+        phones.setdefault(device.user_id, []).append(device)
+
+    users = get_user_model().objects.filter(pk__in=set(scans) | set(phones), is_active=True).prefetch_related(
+        "memberships__warehouse"
+    )
+    rows = []
+    for user in users:
+        own = phones.get(user.pk, [])
+        memberships = [m for m in user.memberships.all() if warehouse_ids is None or m.warehouse_id in warehouse_ids]
+        warehouse = memberships[0].warehouse if memberships else None
+        seen = [d.last_seen_at for d in own] + ([scans[user.pk]["last"]] if user.pk in scans else [])
+        rows.append({
+            "id": user.pk,
+            "name": user.get_full_name() or user.email,
+            "email": user.email,
+            "warehouse": warehouse.pk if warehouse else None,
+            "warehouse_name": warehouse.name if warehouse else None,
+            "scans_today": scans[user.pk]["n"] if user.pk in scans else 0,
+            "pending": sum(d.pending_count or 0 for d in own),
+            "devices": len(own),
+            "last_activity_at": max(seen) if seen else None,
+            "online": any(d.last_seen_at >= online_since and not d.is_blocked for d in own),
+        })
+    return sorted(rows, key=lambda row: (not row["online"], -row["scans_today"], row["name"]))
 
 
 def low_stock(warehouse_ids=None):

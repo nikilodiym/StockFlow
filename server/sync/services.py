@@ -438,6 +438,11 @@ def _as_uuid(value):
         return None
 
 
+def device_uuid(user, key):
+    """Phone id: a UUID as is; a short key such as "android" (old app) becomes a stable per-user UUID."""
+    return _as_uuid(key) or uuid.uuid5(uuid.NAMESPACE_URL, f"stockflow:{user.pk}:{key}")
+
+
 def legacy_sync(user, payload):
     """
     Old format: {device_id: "android", changes: [{client_id, document: {...}}]}.
@@ -446,7 +451,7 @@ def legacy_sync(user, payload):
     Returns (body, has_conflict).
     """
     device_key = str(payload.get("device_id") or "unknown")
-    device_id = _as_uuid(device_key) or uuid.uuid5(uuid.NAMESPACE_URL, f"stockflow:{user.pk}:{device_key}")
+    device_id = device_uuid(user, device_key)
     changes = payload.get("changes") or []
     items, client_ids, rejected = [], [], {}
     for index, change in enumerate(changes):

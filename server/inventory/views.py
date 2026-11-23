@@ -166,15 +166,52 @@ class DashboardView(APIView):
         return Response(selectors.dashboard(request.user, warehouse_ids(request.user)))
 
 
-class ScansByHourView(APIView):
-    """Scanned lines per hour (Profile chart). ?date=YYYY-MM-DD, ?mine=1 for the current user only."""
+def _date_param(request, name):
+    raw = request.query_params.get(name)
+    try:
+        return date.fromisoformat(raw) if raw else None
+    except ValueError:
+        raise ValidationError({name: "Формат YYYY-MM-DD"})
 
-    @extend_schema(parameters=[OpenApiParameter("date", str), OpenApiParameter("mine", bool)], responses={200: dict})
+
+def _report_scope(request):
+    """Warehouses of a report: ?warehouse=<id> (must be a member) or every warehouse the user sees."""
+    warehouse = _int_param(request, "warehouse")
+    if warehouse is None:
+        return warehouse_ids(request.user)
+    services.ensure_member(request.user, warehouse)
+    return [warehouse]
+
+
+REPORT_PARAMS = [OpenApiParameter("warehouse", int), OpenApiParameter("mine", bool)]
+
+
+class ScansByHourView(APIView):
+    """Scanned lines per hour. ?date=YYYY-MM-DD, ?warehouse=<id>, ?mine=1 for the current user only."""
+
+    @extend_schema(parameters=[OpenApiParameter("date", str), *REPORT_PARAMS], responses={200: dict})
     def get(self, request):
-        raw = request.query_params.get("date")
-        try:
-            day = date.fromisoformat(raw) if raw else None
-        except ValueError:
-            raise ValidationError({"date": "Формат YYYY-MM-DD"})
         user = request.user if request.query_params.get("mine") == "1" else None
-        return Response(selectors.scans_by_hour(warehouse_ids(request.user), day, user))
+        return Response(selectors.scans_by_hour(_report_scope(request), _date_param(request, "date"), user))
+
+
+class WorkerActivityView(APIView):
+    """Who worked today: scans, documents queued on phones, last activity, online. ?warehouse=<id>."""
+
+    @extend_schema(parameters=[OpenApiParameter("warehouse", int)], responses={200: dict})
+    def get(self, request):
+        return Response(selectors.worker_activity(_report_scope(request)))
+
+
+class ScansByDayView(APIView):
+    """Scanned lines per day. ?days=7 (1–90), ?end=YYYY-MM-DD, ?warehouse=<id>, ?mine=1."""
+
+    @extend_schema(
+        parameters=[OpenApiParameter("days", int), OpenApiParameter("end", str), *REPORT_PARAMS], responses={200: dict}
+    )
+    def get(self, request):
+        days = _int_param(request, "days", 7)
+        if not 1 <= days <= 90:
+            raise ValidationError({"days": "Від 1 до 90"})
+        user = request.user if request.query_params.get("mine") == "1" else None
+        return Response(selectors.scans_by_day(_report_scope(request), days, _date_param(request, "end"), user))

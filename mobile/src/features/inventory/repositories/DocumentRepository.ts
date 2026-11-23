@@ -126,6 +126,11 @@ export const DocumentRepository = {
     // --- outbox ------------------------------------------------------------
     listOutbox: (db: SQLiteDatabase) => db.getAllAsync<OutboxRow>('SELECT * FROM outbox ORDER BY created_at'),
 
+    async countOutbox(db: SQLiteDatabase): Promise<number> {
+        const row = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM outbox');
+        return row?.n ?? 0;
+    },
+
     getOutbox: (db: SQLiteDatabase, id: string) =>
         db.getFirstAsync<OutboxRow>('SELECT * FROM outbox WHERE id = ?', [id]),
 

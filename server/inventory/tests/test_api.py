@@ -154,3 +154,37 @@ def test_scans_by_hour(client_for, worker, warehouse, make_document, make_produc
     hours = client_for(worker).get("/api/v1/reports/scans-by-hour/?mine=1").data
     assert len(hours) == 24 and sum(h["scans"] for h in hours) == 2
     assert client_for(worker).get("/api/v1/reports/scans-by-hour/?date=nope").status_code == 400
+
+
+def test_scans_by_day(client_for, worker, admin, warehouse, warehouse2, make_document, make_product):
+    make_document("receipt", warehouse, worker, [(make_product(), 1), (make_product(), 2)])
+    make_document("receipt", warehouse2, admin, [(make_product(), 1)])
+    days = client_for(admin).get("/api/v1/reports/scans-by-day/?days=7").data
+    assert len(days) == 7 and days[-1]["scans"] == 3 and sum(d["scans"] for d in days) == 3
+    one = client_for(admin).get(f"/api/v1/reports/scans-by-day/?warehouse={warehouse.pk}").data
+    assert one[-1]["scans"] == 2
+    assert client_for(admin).get("/api/v1/reports/scans-by-day/?days=0").status_code == 400
+
+
+def test_scan_reports_filter_by_warehouse_membership(client_for, worker, warehouse, warehouse2, make_document, make_product):
+    make_document("receipt", warehouse, worker, [(make_product(), 1)])
+    hours = client_for(worker).get(f"/api/v1/reports/scans-by-hour/?warehouse={warehouse.pk}").data
+    assert sum(h["scans"] for h in hours) == 1
+    assert client_for(worker).get(f"/api/v1/reports/scans-by-hour/?warehouse={warehouse2.pk}").status_code == 403
+    assert client_for(worker).get(f"/api/v1/reports/scans-by-day/?warehouse={warehouse2.pk}").status_code == 403
+
+
+def test_worker_activity(client_for, worker, manager, admin, warehouse, warehouse2, make_document, make_product):
+    from django.utils import timezone
+
+    from accounts.models import Device
+
+    make_document("receipt", warehouse, worker, [(make_product(), 1), (make_product(), 2)])
+    Device.objects.create(user=worker, pending_count=4, last_seen_at=timezone.now())
+    rows = client_for(manager).get("/api/v1/reports/workers/").data
+    assert [r["id"] for r in rows] == [worker.pk]
+    row = rows[0]
+    assert row["scans_today"] == 2 and row["pending"] == 4 and row["online"] is True
+    assert row["warehouse"] == warehouse.pk and row["last_activity_at"] is not None
+    assert client_for(manager).get(f"/api/v1/reports/workers/?warehouse={warehouse2.pk}").status_code == 403
+    assert client_for(admin).get(f"/api/v1/reports/workers/?warehouse={warehouse2.pk}").data == []
